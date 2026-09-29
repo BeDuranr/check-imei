@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import { classify, detectOrigin } from "../lib/classify";
 import { buildReport } from "../lib/parse-result";
 import type { DeviceReport } from "../lib/types";
+import service1 from "./fixtures/service1.json";
+import service4 from "./fixtures/service4.json";
+import service5 from "./fixtures/service5.json";
 import service47 from "./fixtures/service47.json";
 
 const clean: DeviceReport = {
@@ -43,6 +46,18 @@ describe("classify", () => {
     expect(result.reasons).toContain("Reportado en blacklist (Blacklisted)");
     expect(result.reasons).toContain("Comprado con compañía (AMERICA MOVIL PERU SAC)");
     expect(result.reasons).toContain("Comprado fuera de Chile (Peru)");
+  });
+
+  it("descarte real con blacklist: rojo y razón legible", () => {
+    const report = buildReport([service1, service5, service4].map((s) => ({ html: s.result, object: s.object })));
+    const result = classify(report, { level: "descarte" });
+    expect(result.verdict).toBe("rojo");
+    expect(result.reasons[0]).toBe("Reportado en blacklist (Blacklisted)");
+  });
+
+  it("lostMode: true es rojo", () => {
+    const report = buildReport([{ object: { lostMode: true } }]);
+    expect(classify(report, { level: "descarte" }).verdict).toBe("rojo");
   });
 
   it("verde cuando es retail, de Chile y sin bloqueos", () => {

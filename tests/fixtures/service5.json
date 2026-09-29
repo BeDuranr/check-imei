@@ -1,0 +1,14 @@
+{
+  "orderId": 111700001,
+  "status": "success",
+  "imei": "35556484XXX3917",
+  "price": "0.02",
+  "result": "IMEI: 35556484XXX3917<br>Brand: Apple Inc<br>Model: Apple iPhone 16 Pro Max (A3296)<br>Model Name: iPhone 16 Pro Max (A3296)<br>Blacklist Status: <span style='color:red;'>Blacklisted</span><br>",
+  "object": {
+    "name": "iPhone 16 Pro Max (A3296)",
+    "brand": "Apple Inc",
+    "model": "Apple iPhone 16 Pro Max (A3296)",
+    "blacklistStatus": true,
+    "gsmaBlacklisted": true
+  }
+}

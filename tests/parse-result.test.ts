@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { buildReport, decodeEntities, htmlToLines, parseResultHtml } from "../lib/parse-result";
 import service1 from "./fixtures/service1.json";
+import service4 from "./fixtures/service4.json";
+import service5 from "./fixtures/service5.json";
 import service47 from "./fixtures/service47.json";
 
 describe("parseResultHtml", () => {
@@ -53,6 +55,20 @@ describe("buildReport", () => {
     expect(report.model).toBe("iPhone 16 Pro Max (A3296) [Global]");
     expect(report.fmi).toBe("ON");
     expect(report.soldBy).toBeUndefined();
+  });
+
+  it("descarte real (1 → 5 → 4): booleanos de object con su significado", () => {
+    const report = buildReport([service1, service5, service4].map((s) => ({ html: s.result, object: s.object })));
+    expect(report.blacklist).toBe("Blacklisted");
+    expect(report.icloudStatus).toBe("Clean");
+    expect(report.fmi).toBe("ON");
+    expect(report.model).toBe("iPhone 16 Pro Max (A3296) [Global]");
+  });
+
+  it("lostMode: true sin texto de iCloud se reporta como perdido", () => {
+    const report = buildReport([{ html: "", object: { lostMode: true, blacklistStatus: false } }]);
+    expect(report.icloudStatus).toBe("Lost Mode");
+    expect(report.blacklist).toBe("Clean");
   });
 
   it("combina varios servicios sin pisar la primera aparición", () => {

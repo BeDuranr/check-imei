@@ -80,6 +80,15 @@ const FIELD_KEYS = {
   loaner: ["loanerdevice", "loaner"],
 } as const satisfies Record<string, readonly string[]>;
 
+// Booleanos de `object` con significado propio (verificado con respuestas reales de los
+// servicios 5 y 4). El resto de los booleanos se guarda como "Yes"/"No".
+const BOOLEAN_LABELS: Record<string, [whenTrue: string, whenFalse: string]> = {
+  blackliststatus: ["Blacklisted", "Clean"],
+  gsmablacklisted: ["Blacklisted", "Clean"],
+  lostmode: ["Lost Mode", "Clean"],
+  fmion: ["ON", "OFF"],
+};
+
 function toOnOff(value: string | undefined): "ON" | "OFF" | undefined {
   if (!value) return undefined;
   const v = value.trim().toUpperCase();
@@ -111,7 +120,10 @@ export function buildReport(sources: ReportSource[]): DeviceReport {
     if (source.object) {
       for (const [key, value] of Object.entries(source.object)) {
         if (typeof value === "string" || typeof value === "number") add(key, String(value).trim());
-        else if (typeof value === "boolean") add(key, value ? "Yes" : "No");
+        else if (typeof value === "boolean") {
+          const labels = BOOLEAN_LABELS[normKey(key)] ?? ["Yes", "No"];
+          add(key, value ? labels[0] : labels[1]);
+        }
       }
     }
     if (source.html) {
