@@ -100,6 +100,50 @@ export async function createOrder(
   return { ok: false, kind: status === "failed" ? "failed" : "error", message, raw };
 }
 
+export type OrderResult =
+  | {
+      ok: true;
+      orderId: number;
+      serviceName: string;
+      imei: string;
+      status: string;
+      price: number;
+      resultHtml: string;
+      createdAt: string; // ISO en UTC
+      raw: unknown;
+    }
+  | { ok: false; kind: ProviderErrorKind; message: string; raw: unknown };
+
+/**
+ * Consulta una orden ya pagada (`/history`, no cobra). Usa otros nombres que `/create`:
+ * `order_id`, `credit`, `status` en mayúsculas, y no trae `object`.
+ */
+export async function getOrder(orderId: number): Promise<OrderResult> {
+  const r = await call("history", { orderId: String(orderId) }, 20_000);
+  if (!r.ok) return { ok: false, kind: r.kind, message: r.message, raw: null };
+
+  const raw = redactKey(r.json, process.env.IMEICHECK_API_KEY);
+  const j = r.json;
+  if (String(j.status ?? "").toLowerCase() === "error" || j.order_id === undefined) {
+    return { ok: false, kind: "error", message: String(j.response ?? "Orden no encontrada"), raw };
+  }
+
+  const price = parseFloat(String(j.credit ?? "0"));
+  // El proveedor entrega "2026-09-29 19:01:57" en UTC.
+  const created = String(j.created_at ?? "").replace(" ", "T");
+  return {
+    ok: true,
+    orderId: Number(j.order_id),
+    serviceName: String(j.service_name ?? ""),
+    imei: String(j.imei ?? ""),
+    status: String(j.status ?? ""),
+    price: Number.isFinite(price) ? price : 0,
+    resultHtml: typeof j.result === "string" ? j.result : "",
+    createdAt: /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(created) ? `${created}Z` : new Date().toISOString(),
+    raw,
+  };
+}
+
 export type BalanceResult = { ok: true; balance: number } | { ok: false; kind: ProviderErrorKind; message: string };
 
 export async function getBalance(): Promise<BalanceResult> {

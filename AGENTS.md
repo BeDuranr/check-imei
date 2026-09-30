@@ -45,6 +45,7 @@ app/
     balance/route.ts      # GET: saldo del proveedor (caché 60 s, ?fresh=1 la salta)
     checks/route.ts       # GET: historial paginado (page, q, verdict, imei)
     checks/[id]/route.ts  # GET detalle, PATCH decisión/precio/notas
+    import/route.ts       # POST: importa una orden ya pagada (servicio 47) vía /history, sin cobrar
     login/route.ts        # GET estado de sesión, POST login, DELETE logout
 components/               # componentes de cliente (UI)
 lib/
@@ -54,7 +55,8 @@ lib/
   parse-result.ts         # HTML del proveedor → DeviceReport
   classify.ts             # veredicto y origen (lista CARRIER_SELLERS)
   run-check.ts            # orquesta los servicios de un nivel (inyección de dependencias, testeable)
-  imeicheck.ts            # cliente HTTP del proveedor (server-only)
+  imeicheck.ts            # cliente HTTP del proveedor (server-only): createOrder, getOrder, getBalance
+  import-order.ts         # convierte una orden de /history en un chequeo (lógica pura)
   errors.ts               # traduce errores del proveedor a mensajes para el usuario
   db.ts                   # acceso a Supabase (server-only)
   auth.ts                 # firma/verificación HMAC de la cookie de sesión (Web Crypto)
@@ -104,8 +106,10 @@ tests/                    # tests de Vitest + fixtures con respuestas reales del
   - Servicio 47: `object: false`; todo se saca del HTML.
 - Fallido (`status: "failed"`): usa `cost` y `response`, sin `price` ni `result`. No cobra.
 - Error de sistema (`status: "error"`): `response` con el motivo (key inválida, IP, saldo).
-- `/history` usa otros nombres (`order_id`, `credit`, `status` en mayúsculas) y **no trae `object`**; por eso todo se
-  guarda en la base de datos al crear la orden.
+- `/history` usa otros nombres (`order_id`, `credit`, `status` en mayúsculas), **no trae `object`** ni el ID del
+  servicio (solo `service_name`); por eso todo se guarda en la base de datos al crear la orden. Sirve para importar
+  órdenes hechas fuera de la página. Fechas en UTC. Orden inexistente → `status: "error"`, `response: "Invalid OrderId"`.
+- En el HTML de `/history` los atributos traen comillas escapadas (`<font color=\"#008000\">`); el parser las limpia igual.
 - En el HTML hay claves repetidas (`IMEI`, `Model`) y con espacio antes de `:`. El parser se queda con la **primera**
   aparición y quita el punto final de valores como `Unlock.`.
 

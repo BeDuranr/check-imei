@@ -1,0 +1,14 @@
+{
+  "order_id": 111622833,
+  "service_name": "APPLE ULTIMATE INFO — SOLD / CHIMAERA / MDM/BLACKLIST",
+  "imei": "490154203237518",
+  "status": "SUCCESS",
+  "credit": "0.75",
+  "balance_left": "4.29",
+  "comes_from": "PHP API",
+  "note": null,
+  "created_at": "2026-09-29 19:01:57",
+  "updated_at": "2026-09-29 19:02:24",
+  "ip": "0.0.0.0",
+  "result": "Model: iPhone 16 Pro Max<br>Config Description: IPHONE 16 PROMAX,ROW,256GB,DSRT TTNM<br>Config Code: 0050D4<br>Serial Number: XXXXXXXXXX<br>IMEI: 490154203237518<br>IMEI2: 490154203237500<br>EID: ...<br>Product Line: 301048<br>Sold By: AMERICA MOVIL PERU SAC<br>Warranty Status: Out Of Warranty (No Coverage)<br>Warranty Code: OO<br>Purchase Country: Peru<br>Purchase Date: 2025-01-04<br>Carrier: entel<br>Applied Activation Policy: <font color=\\\"#008000\\\">Unlock</font>.<br><font color=\\\"#008000\\\">Unlock</font> Date: 2026-09-24 17:39:50<br>First Activation Date: 2025-01-04 21:53:08<br>MDM Lock: <span style=\\\"color:#00c853;font-weight:bold\\\"><b><font color=\\\"#00c200\\\">OFF</font></b></span><br>FMI: <span style=\\\"color:#ff0000;font-weight:bold\\\"><b><font color=\\\"#ff0000\\\">ON</font></b></span><br>Loaner Device: No<br>Replacement History : No Replacment<br><strong>Chimaera Locked</strong>: <span style=\"color:green;font-weight:bold;\">OFF</span><br>Blacklist Status: <span style='color:red;'>Blacklisted</span><br>"
+}

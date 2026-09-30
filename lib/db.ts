@@ -154,22 +154,49 @@ export async function insertPending(imei: string, level: Level): Promise<string 
   return data.id;
 }
 
+function resultColumns(result: RunResult) {
+  return {
+    status: result.status,
+    model: result.report?.model ?? null,
+    order_ids: result.orderIds,
+    cost_usd: result.costUsd,
+    raw_responses: result.entries,
+    report: result.report,
+    verdict: result.classification?.verdict ?? null,
+    origin: result.classification?.origin ?? null,
+    reasons: result.classification?.reasons ?? [],
+    error_message: result.errorMessage,
+  };
+}
+
 export async function finishCheck(id: string, result: RunResult): Promise<Check> {
   const { data, error } = await db()
     .from("checks")
-    .update({
-      status: result.status,
-      model: result.report?.model ?? null,
-      order_ids: result.orderIds,
-      cost_usd: result.costUsd,
-      raw_responses: result.entries,
-      report: result.report,
-      verdict: result.classification?.verdict ?? null,
-      origin: result.classification?.origin ?? null,
-      reasons: result.classification?.reasons ?? [],
-      error_message: result.errorMessage,
-    })
+    .update(resultColumns(result))
     .eq("id", id)
+    .select("*")
+    .single<CheckRow>();
+  if (error) throw error;
+  return toCheck(data);
+}
+
+/** Busca un chequeo que ya incluya esa orden del proveedor (para no importarla dos veces). */
+export async function findCheckIdByOrderId(orderId: number): Promise<string | null> {
+  const { data, error } = await db()
+    .from("checks")
+    .select("id")
+    .contains("order_ids", [orderId])
+    .limit(1)
+    .maybeSingle<{ id: string }>();
+  if (error) throw error;
+  return data?.id ?? null;
+}
+
+/** Guarda un chequeo ya terminado (orden importada), con la fecha real de la orden. */
+export async function insertCompletedCheck(imei: string, level: Level, createdAt: string, result: RunResult): Promise<Check> {
+  const { data, error } = await db()
+    .from("checks")
+    .insert({ imei, level, services: LEVEL_SERVICES[level], created_at: createdAt, ...resultColumns(result) })
     .select("*")
     .single<CheckRow>();
   if (error) throw error;
