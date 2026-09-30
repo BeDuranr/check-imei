@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { listChecks, monthTotalUsd, PAGE_SIZE } from "@/lib/db";
+import { listCheckGroups, listChecks, monthTotalUsd, PAGE_SIZE } from "@/lib/db";
 import { serverError } from "@/lib/http";
 import { normalizeImei } from "@/lib/imei";
 import type { Verdict } from "@/lib/types";
@@ -19,10 +19,12 @@ export async function GET(req: NextRequest) {
   const imei = params.get("imei") ? normalizeImei(params.get("imei")!) : undefined;
 
   try {
-    const [list, monthTotal] = await Promise.all([
-      listChecks({ page, pageSize, q, verdict, imei, onlyUsable: !!imei }),
-      imei ? Promise.resolve(null) : monthTotalUsd(),
-    ]);
+    if (imei) {
+      const list = await listChecks({ page, pageSize, imei, onlyUsable: true });
+      return NextResponse.json({ ...list, page, pageSize });
+    }
+    // Historial: una fila por IMEI, con los chequeos combinados.
+    const [list, monthTotal] = await Promise.all([listCheckGroups({ page, pageSize, q, verdict }), monthTotalUsd()]);
     return NextResponse.json({ ...list, page, pageSize, monthTotalUsd: monthTotal });
   } catch (err) {
     return serverError("checks", err);

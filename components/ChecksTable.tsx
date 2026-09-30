@@ -5,13 +5,14 @@ import { useEffect, useState } from "react";
 import { apiFetch, readError } from "@/lib/client-fetch";
 import { LEVEL_LABEL } from "@/lib/constants";
 import { formatDateTime, formatUsd, maskImei } from "@/lib/format";
-import type { CheckSummary, Origin, Verdict } from "@/lib/types";
+import type { CheckGroup } from "@/lib/combine";
+import type { Origin, Verdict } from "@/lib/types";
 import { VerdictBadge } from "./VerdictBanner";
 
 const ORIGIN_LABEL: Record<Origin, string> = { retail: "Retail", compañia: "Compañía", desconocido: "Origen ?" };
 
 interface ListResponse {
-  items: CheckSummary[];
+  groups: CheckGroup[];
   total: number;
   page: number;
   pageSize: number;
@@ -97,29 +98,38 @@ export function ChecksTable() {
 
       {(data || !error) && (
       <ul className={`divide-y divide-line overflow-hidden rounded-2xl border border-line bg-card ${loading ? "opacity-60" : ""}`}>
-        {data?.items.map((item) => (
-          <li key={item.id}>
-            <Link href={`/historial/${item.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-bg/50">
+        {data?.groups.map((group) => (
+          <li key={group.imei}>
+            <Link href={`/historial/${group.openId}`} className="flex items-center gap-3 px-4 py-3 hover:bg-bg/50">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <VerdictBadge verdict={item.verdict} />
-                  <span className="truncate font-medium">{item.model ?? "Modelo desconocido"}</span>
+                  <VerdictBadge verdict={group.verdict} />
+                  <span className="truncate font-medium">{group.model ?? "Modelo desconocido"}</span>
                 </div>
                 <div className="mt-0.5 flex flex-wrap gap-x-2 text-sm text-muted">
-                  <span className="font-mono">{maskImei(item.imei)}</span>
-                  <span>· {LEVEL_LABEL[item.level]}</span>
-                  {item.origin && item.origin !== "desconocido" && <span>· {ORIGIN_LABEL[item.origin]}</span>}
-                  {item.status === "partial" && <span>· incompleto</span>}
+                  <span className="font-mono">{maskImei(group.imei)}</span>
+                  {group.origin && group.origin !== "desconocido" && <span>· {ORIGIN_LABEL[group.origin]}</span>}
+                  {group.partial && <span>· incompleto</span>}
+                </div>
+                <div className="mt-1.5 flex flex-wrap gap-1">
+                  {group.levels.map((level) => (
+                    <span key={level} className="rounded-md bg-bg px-1.5 py-0.5 text-xs text-muted">
+                      {LEVEL_LABEL[level]}
+                    </span>
+                  ))}
+                  {group.count > group.levels.length && (
+                    <span className="rounded-md bg-bg px-1.5 py-0.5 text-xs text-muted">{group.count} chequeos</span>
+                  )}
                 </div>
               </div>
               <div className="shrink-0 text-right text-sm">
-                <div className="tabular-nums">{formatUsd(item.costUsd)}</div>
-                <div className="text-xs text-muted">{formatDateTime(item.createdAt)}</div>
+                <div className="tabular-nums">{formatUsd(group.totalCostUsd)}</div>
+                <div className="text-xs text-muted">{formatDateTime(group.lastAt)}</div>
               </div>
             </Link>
           </li>
         ))}
-        {data && data.items.length === 0 && <li className="px-4 py-8 text-center text-muted">No hay chequeos.</li>}
+        {data && data.groups.length === 0 && <li className="px-4 py-8 text-center text-muted">No hay chequeos.</li>}
         {!data && <li className="px-4 py-8 text-center text-muted">Cargando…</li>}
       </ul>
       )}

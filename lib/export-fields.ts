@@ -1,9 +1,9 @@
 // Selecciona y traduce solo los datos importantes de un chequeo para la imagen exportable.
 // Lógica pura (sin canvas) para poder testearla.
 
-import { classify } from "./classify";
+import { combineChecks } from "./combine";
 import { formatDate, formatProviderDate } from "./format";
-import type { Check, DeviceReport, Verdict } from "./types";
+import type { Check, Verdict } from "./types";
 
 export type ExportTone = "ok" | "warn" | "bad";
 
@@ -57,31 +57,6 @@ function onOff(value: "ON" | "OFF" | undefined, labels: [on: string, off: string
   return value === "ON" ? { value: labels[0], tone: onTone } : { value: labels[1], tone: "ok" as const };
 }
 
-/** Ordena los chequeos: procedencia primero (trae más datos), luego el más reciente. */
-function byPriority(a: Check, b: Check): number {
-  if (a.level !== b.level) return a.level === "procedencia" ? -1 : 1;
-  return b.createdAt.localeCompare(a.createdAt);
-}
-
-/** Combina reportes: cada campo se toma del primer reporte que lo tenga. */
-export function mergeReports(reports: DeviceReport[]): DeviceReport {
-  const merged: DeviceReport = { raw: {} };
-  const seen = new Set<string>();
-  for (const report of reports) {
-    for (const [key, value] of Object.entries(report) as [keyof DeviceReport, unknown][]) {
-      if (key === "raw" || value === undefined || merged[key] !== undefined) continue;
-      (merged as unknown as Record<string, unknown>)[key] = value;
-    }
-    for (const [key, value] of Object.entries(report.raw ?? {})) {
-      const norm = key.toLowerCase().replace(/[^a-z0-9]/g, "");
-      if (seen.has(norm)) continue;
-      seen.add(norm);
-      merged.raw[key] = value;
-    }
-  }
-  return merged;
-}
-
 function titleCase(text: string): string {
   return text.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase());
 }
@@ -95,13 +70,10 @@ function hasReplacement(history: string): boolean {
  * descarte y la procedencia) y los combina en una sola imagen.
  */
 export function buildExportData(checks: Check[]): ExportData {
-  const sorted = checks.filter((c) => c.report).sort(byPriority);
-  const main = sorted[0] ?? checks[0];
-  const r = mergeReports(sorted.map((c) => c.report!));
+  // Con varios chequeos del mismo IMEI se usan los datos combinados y el veredicto recalculado.
+  const main = combineChecks(checks) ?? checks[0];
+  const r = main.report ?? { raw: {} };
   const raw = r.raw;
-  const level = sorted.some((c) => c.level === "procedencia") ? "procedencia" : "descarte";
-  // Con varios chequeos el veredicto se recalcula sobre los datos combinados.
-  const verdict = sorted.length > 1 ? classify(r, { level }).verdict : main.verdict;
 
   const rows = (items: (ExportRow | false | undefined)[]) =>
     items.filter((row): row is ExportRow => !!row && present(row.value));
@@ -150,15 +122,14 @@ export function buildExportData(checks: Check[]): ExportData {
     },
   ]);
 
-  const latest = sorted.reduce((a, c) => (c.createdAt > a ? c.createdAt : a), main.createdAt);
   return {
     model: r.model ?? main.model ?? "iPhone",
-    verdict,
+    verdict: main.verdict,
     sections: [
       { title: "Equipo", rows: equipo },
       { title: "Compra", rows: compra },
       { title: "Bloqueos y estado", rows: estado },
     ].filter((s) => s.rows.length > 0),
-    footer: `Revisado el ${formatDate(latest)}`,
+    footer: `Revisado el ${formatDate(main.createdAt)}`,
   };
 }

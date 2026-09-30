@@ -73,9 +73,13 @@ interface Props {
   onProcedencia?: () => void;
   onRecheck?: () => void;
   busy?: boolean;
+  /** Si la tarjeta muestra un reporte combinado: los chequeos que lo forman. */
+  combinedFrom?: Check[];
+  /** Chequeos del mismo IMEI ya cargados, para que la imagen exportada no los vuelva a pedir. */
+  related?: Check[];
 }
 
-export function ReportCard({ check, cached, onProcedencia, onRecheck, busy }: Props) {
+export function ReportCard({ check, cached, onProcedencia, onRecheck, busy, combinedFrom, related }: Props) {
   const [copied, setCopied] = useState(false);
   const [exporting, setExporting] = useState(false);
   const r: Partial<DeviceReport> = check.report ?? {};
@@ -95,7 +99,9 @@ export function ReportCard({ check, cached, onProcedencia, onRecheck, busy }: Pr
         <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-sm text-muted">
           <span className="font-mono">{check.imei}</span>
           <span>
-            {LEVEL_LABEL[check.level]} · {formatDateTime(check.createdAt)}
+            {combinedFrom && combinedFrom.length > 1
+              ? `Combina ${combinedFrom.map((c) => LEVEL_LABEL[c.level].toLowerCase()).join(" + ")}`
+              : `${LEVEL_LABEL[check.level]} · ${formatDateTime(check.createdAt)}`}
           </span>
         </div>
 
@@ -213,7 +219,7 @@ export function ReportCard({ check, cached, onProcedencia, onRecheck, busy }: Pr
           </button>
         )}
       </div>
-      {exporting && <ExportImageDialog check={check} onClose={() => setExporting(false)} />}
+      {exporting && <ExportImageDialog check={check} sources={related} onClose={() => setExporting(false)} />}
     </article>
   );
 }

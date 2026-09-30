@@ -1,5 +1,6 @@
 import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { groupChecks } from "./combine";
 import { CACHE_DAYS, LEVEL_SERVICES, SERVICES, type Level } from "./constants";
 import { userMessage } from "./errors";
 import type { RunResult, ServiceEntry } from "./run-check";
@@ -255,6 +256,35 @@ export async function listChecks({ page, pageSize = PAGE_SIZE, q, verdict, imei,
   return { items: (data ?? []).map((row) => toSummary(row as CheckRow)), total: count ?? 0 };
 }
 
+/** Máximo de chequeos que se leen para agrupar el historial (un solo usuario, volumen bajo). */
+const GROUP_SCAN_LIMIT = 2000;
+
+export interface GroupParams {
+  page: number;
+  pageSize?: number;
+  q?: string;
+  verdict?: Verdict;
+}
+
+/** Historial agrupado por IMEI, con el veredicto de los datos combinados. */
+export async function listCheckGroups({ page, pageSize = PAGE_SIZE, q, verdict }: GroupParams) {
+  const { data, error } = await db()
+    .from("checks")
+    .select("*")
+    .neq("status", "pending")
+    .order("created_at", { ascending: false })
+    .limit(GROUP_SCAN_LIMIT);
+  if (error) throw error;
+
+  const needle = q?.trim().toLowerCase();
+  const groups = groupChecks((data ?? []).map((row) => toCheck(row as CheckRow))).filter(
+    (g) =>
+      (!verdict || g.verdict === verdict) &&
+      (!needle || g.imei.includes(needle) || (g.model ?? "").toLowerCase().includes(needle)),
+  );
+  return { groups: groups.slice((page - 1) * pageSize, page * pageSize), total: groups.length };
+}
+
 /** Inicio del mes actual en hora de Chile, como instante UTC. */
 function startOfMonthChile(now = new Date()): Date {
   const tz = "America/Santiago";
@@ -279,7 +309,14 @@ export async function monthTotalUsd(): Promise<number> {
   return Math.round(total * 100) / 100;
 }
 
-export async function getCheck(id: string): Promise<{ check: Check; device: Device | null } | null> {
+export interface CheckWithRelated {
+  check: Check;
+  device: Device | null;
+  /** Todos los chequeos terminados del mismo IMEI (incluido este), del más reciente al más antiguo. */
+  related: Check[];
+}
+
+export async function getCheck(id: string): Promise<CheckWithRelated | null> {
   if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
   const { data, error } = await db().from("checks").select("*").eq("id", id).maybeSingle<CheckRow>();
   if (error) throw error;
@@ -290,7 +327,18 @@ export async function getCheck(id: string): Promise<{ check: Check; device: Devi
     .eq("imei", data.imei)
     .maybeSingle<DeviceRow>();
   if (e) throw e;
-  return { check: toCheck(data), device: device ? toDevice(device) : null };
+  const { data: related, error: e2 } = await db()
+    .from("checks")
+    .select("*")
+    .eq("imei", data.imei)
+    .neq("status", "pending")
+    .order("created_at", { ascending: false });
+  if (e2) throw e2;
+  return {
+    check: toCheck(data),
+    device: device ? toDevice(device) : null,
+    related: (related ?? []).map((row) => toCheck(row as CheckRow)),
+  };
 }
 
 export interface DevicePatch {

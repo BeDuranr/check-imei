@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "@/lib/client-fetch";
-import { LEVEL_LABEL, LEVELS } from "@/lib/constants";
+import { latestPerLevel } from "@/lib/combine";
+import { LEVEL_LABEL } from "@/lib/constants";
 import { buildExportData } from "@/lib/export-fields";
 import { formatDate } from "@/lib/format";
 import { renderReportImage } from "@/lib/report-image";
-import type { Check, CheckSummary } from "@/lib/types";
+import type { Check } from "@/lib/types";
 
 interface Rendered {
   includeVerdict: boolean;
@@ -14,38 +15,37 @@ interface Rendered {
   url: string;
 }
 
-export function ExportImageDialog({ check, onClose }: { check: Check; onClose: () => void }) {
+interface Props {
+  check: Check;
+  /** Chequeos del mismo IMEI ya cargados. Si no vienen, se piden al servidor. */
+  sources?: Check[];
+  onClose: () => void;
+}
+
+export function ExportImageDialog({ check, sources, onClose }: Props) {
   const [includeVerdict, setIncludeVerdict] = useState(false);
   const [rendered, setRendered] = useState<Rendered | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // Chequeos del otro nivel para el mismo IMEI (p. ej. la procedencia si se abrió un descarte).
-  const [others, setOthers] = useState<Check[]>([]);
-  const checks = useMemo(() => [check, ...others], [check, others]);
+  const [fetched, setFetched] = useState<Check[] | null>(null);
+  const checks = useMemo(() => sources ?? fetched ?? [check], [sources, fetched, check]);
   const data = useMemo(() => buildExportData(checks), [checks]);
-  const hasProcedencia = checks.some((c) => c.level === "procedencia");
+  const used = useMemo(() => latestPerLevel(checks), [checks]);
+  const hasProcedencia = used.some((c) => c.level === "procedencia");
 
+  // Trae los demás chequeos del mismo IMEI para combinarlos (p. ej. la procedencia si se abrió un descarte).
   useEffect(() => {
+    if (sources) return;
     const ctrl = new AbortController();
-    (async () => {
-      const res = await apiFetch(`/api/checks?imei=${check.imei}&pageSize=20`, { signal: ctrl.signal });
-      if (!res.ok) return;
-      const { items } = (await res.json()) as { items: CheckSummary[] };
-      // La lista viene ordenada de más nuevo a más antiguo: se usa el último de cada otro nivel.
-      const wanted = LEVELS.filter((level) => level !== check.level)
-        .map((level) => items.find((item) => item.level === level))
-        .filter((item): item is CheckSummary => !!item);
-      const details = await Promise.all(
-        wanted.map(async (item) => {
-          const r = await apiFetch(`/api/checks/${item.id}`, { signal: ctrl.signal });
-          return r.ok ? ((await r.json()) as { check: Check }).check : null;
-        }),
-      );
-      setOthers(details.filter((c): c is Check => !!c?.report));
-    })().catch(() => {
-      // sin datos extra: la imagen queda solo con este chequeo
-    });
+    apiFetch(`/api/checks/${check.id}`, { signal: ctrl.signal })
+      .then(async (res) => {
+        if (res.ok) setFetched(((await res.json()) as { related: Check[] }).related);
+      })
+      .catch(() => {
+        // sin datos extra: la imagen queda solo con este chequeo
+      });
     return () => ctrl.abort();
-  }, [check.imei, check.level]);
+  }, [check.id, sources]);
+
   const fileName = `iphone-${check.imei.slice(-4)}-${check.createdAt.slice(0, 10)}.png`;
   const generating = !error && rendered?.includeVerdict !== includeVerdict;
 
@@ -113,10 +113,10 @@ export function ExportImageDialog({ check, onClose }: { check: Check; onClose: (
           </button>
         </div>
 
-        {checks.length > 1 && (
+        {used.length > 1 && (
           <p className="text-sm text-muted">
             Combina:{" "}
-            {checks.map((c) => `${LEVEL_LABEL[c.level]} (${formatDate(c.createdAt)})`).join(" + ")}
+            {used.map((c) => `${LEVEL_LABEL[c.level]} (${formatDate(c.createdAt)})`).join(" + ")}
           </p>
         )}
 

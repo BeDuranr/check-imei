@@ -43,8 +43,8 @@ app/
   api/
     check/route.ts        # POST: ejecuta un chequeo (maxDuration = 60)
     balance/route.ts      # GET: saldo del proveedor (caché 60 s, ?fresh=1 la salta)
-    checks/route.ts       # GET: historial paginado (page, q, verdict, imei)
-    checks/[id]/route.ts  # GET detalle, PATCH decisión/precio/notas
+    checks/route.ts       # GET: historial agrupado por IMEI (page, q, verdict); con ?imei= lista chequeos sueltos
+    checks/[id]/route.ts  # GET detalle + `related` (todos los chequeos del mismo IMEI), PATCH decisión/precio/notas
     import/route.ts       # POST: importa una orden ya pagada (servicio 47) vía /history, sin cobrar
     login/route.ts        # GET estado de sesión, POST login, DELETE logout
 components/               # componentes de cliente (UI)
@@ -60,6 +60,7 @@ lib/
   errors.ts               # traduce errores del proveedor a mensajes para el usuario
   db.ts                   # acceso a Supabase (server-only)
   auth.ts                 # firma/verificación HMAC de la cookie de sesión (Web Crypto)
+  combine.ts              # une descarte + procedencia del mismo IMEI y agrupa el historial (lógica pura)
   export-fields.ts        # elige y traduce los datos clave para la imagen exportable (lógica pura)
   report-image.ts         # dibuja la imagen exportable con canvas (solo navegador, sin librerías)
 supabase/migrations/      # SQL del esquema; se ejecuta a mano en el SQL Editor de Supabase
@@ -94,6 +95,8 @@ tests/                    # tests de Vitest + fixtures con respuestas reales del
   solo como información.
 - **Veredicto:** rojo = blacklist no limpia, iCloud perdido/borrado o MDM ON. Amarillo = compañía, comprado fuera de
   Chile, FMI ON, reemplazo, loaner, servicio fallido o falta procedencia. Verde = nada de lo anterior y retail.
+- **Historial por IMEI:** se muestra una fila por equipo. El reporte combinado toma el último chequeo de cada
+  nivel (procedencia manda, el descarte completa, p. ej. iCloud) y recalcula el veredicto con `combineChecks`.
 - Cualquier cambio en `classify.ts` o `parse-result.ts` necesita tests nuevos o actualizados.
 
 ## Formatos reales del proveedor (verificados)
