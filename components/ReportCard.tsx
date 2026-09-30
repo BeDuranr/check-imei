@@ -4,6 +4,7 @@ import { useState } from "react";
 import { LEVEL_LABEL } from "@/lib/constants";
 import { formatDate, formatDateTime, formatUsd } from "@/lib/format";
 import type { Check, DeviceReport, Origin } from "@/lib/types";
+import { ExportImageDialog } from "./ExportImageDialog";
 import { ReportTable } from "./ReportTable";
 import { VERDICT_TITLE, VerdictBanner } from "./VerdictBanner";
 
@@ -76,6 +77,7 @@ interface Props {
 
 export function ReportCard({ check, cached, onProcedencia, onRecheck, busy }: Props) {
   const [copied, setCopied] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const r: Partial<DeviceReport> = check.report ?? {};
   const isDescarte = check.level === "descarte";
 
@@ -179,6 +181,15 @@ export function ReportCard({ check, cached, onProcedencia, onRecheck, busy }: Pr
           >
             {copied ? "Copiado ✓" : "Copiar resumen"}
           </button>
+          {check.report && (
+            <button
+              type="button"
+              onClick={() => setExporting(true)}
+              className="rounded-lg border border-line px-3 py-2 text-sm font-medium hover:border-accent"
+            >
+              Exportar imagen
+            </button>
+          )}
           {onRecheck && (
             <button
               type="button"
@@ -202,6 +213,7 @@ export function ReportCard({ check, cached, onProcedencia, onRecheck, busy }: Pr
           </button>
         )}
       </div>
+      {exporting && <ExportImageDialog check={check} onClose={() => setExporting(false)} />}
     </article>
   );
 }

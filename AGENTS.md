@@ -58,6 +58,8 @@ lib/
   errors.ts               # traduce errores del proveedor a mensajes para el usuario
   db.ts                   # acceso a Supabase (server-only)
   auth.ts                 # firma/verificación HMAC de la cookie de sesión (Web Crypto)
+  export-fields.ts        # elige y traduce los datos clave para la imagen exportable (lógica pura)
+  report-image.ts         # dibuja la imagen exportable con canvas (solo navegador, sin librerías)
 supabase/migrations/      # SQL del esquema; se ejecuta a mano en el SQL Editor de Supabase
 tests/                    # tests de Vitest + fixtures con respuestas reales del proveedor
 ```
