@@ -33,11 +33,11 @@ function row(data: ExportData, label: string) {
 }
 
 describe("buildExportData", () => {
-  const procedencia = buildExportData(makeCheck("procedencia", buildReport([{ html: service47.result }])));
+  const procedencia = buildExportData([makeCheck("procedencia", buildReport([{ html: service47.result }]))]);
 
   it("usa el modelo como título y agrupa en secciones", () => {
     expect(procedencia.model).toBe("iPhone 16 Pro Max");
-    expect(procedencia.sections.map((s) => s.title)).toEqual(["Equipo", "Compra", "Bloqueos"]);
+    expect(procedencia.sections.map((s) => s.title)).toEqual(["Equipo", "Compra", "Bloqueos y estado"]);
     expect(procedencia.verdict).toBe("rojo");
   });
 
@@ -65,10 +65,37 @@ describe("buildExportData", () => {
 
   it("descarte: sin sección de compra, con iCloud", () => {
     const report = buildReport([service1, service5, service4].map((s) => ({ html: s.result, object: s.object })));
-    const data = buildExportData(makeCheck("descarte", report));
-    expect(data.sections.map((s) => s.title)).toEqual(["Equipo", "Bloqueos"]);
+    const data = buildExportData([makeCheck("descarte", report)]);
+    expect(data.sections.map((s) => s.title)).toEqual(["Equipo", "Bloqueos y estado"]);
     expect(row(data, "iCloud")).toMatchObject({ value: "Limpio", tone: "ok" });
     expect(row(data, "Blacklist")?.value).toBe("Reportado");
+  });
+
+  it("agrega operador y reemplazo", () => {
+    expect(row(procedencia, "Operador")?.value).toBe("Entel");
+    expect(row(procedencia, "Reemplazo")).toMatchObject({ value: "Sin reemplazos", tone: "ok" });
+
+    const replaced = buildReport([{ html: "Sold By: FALABELLA<br>Replacement History : Replaced 2024-05-02" }]);
+    expect(row(buildExportData([makeCheck("procedencia", replaced)]), "Reemplazo")).toMatchObject({
+      value: "Replaced 2024-05-02",
+      tone: "warn",
+    });
+  });
+
+  it("une descarte y procedencia del mismo IMEI", () => {
+    const descarteReport = buildReport([service1, service5, service4].map((s) => ({ html: s.result, object: s.object })));
+    const descarte = { ...makeCheck("descarte", descarteReport), createdAt: "2026-09-29T10:00:00.000Z" };
+    const proc = makeCheck("procedencia", buildReport([{ html: service47.result }]));
+
+    // Da lo mismo cuál se abrió primero: la procedencia manda y el descarte completa.
+    for (const data of [buildExportData([descarte, proc]), buildExportData([proc, descarte])]) {
+      expect(data.model).toBe("iPhone 16 Pro Max");
+      expect(row(data, "Lugar de compra")?.value).toBe("AMERICA MOVIL PERU SAC");
+      expect(row(data, "iCloud")).toMatchObject({ value: "Limpio" }); // solo viene en el descarte
+      expect(row(data, "Bloqueo MDM")?.value).toBe("No"); // solo viene en la procedencia
+      expect(data.verdict).toBe("rojo");
+      expect(data.sections.map((s) => s.title)).toEqual(["Equipo", "Compra", "Bloqueos y estado"]);
+    }
   });
 
   it("no incluye el texto completo del reporte", () => {

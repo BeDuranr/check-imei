@@ -1,8 +1,9 @@
 // Selecciona y traduce solo los datos importantes de un chequeo para la imagen exportable.
 // Lógica pura (sin canvas) para poder testearla.
 
+import { classify } from "./classify";
 import { formatDate, formatProviderDate } from "./format";
-import type { Check, Verdict } from "./types";
+import type { Check, DeviceReport, Verdict } from "./types";
 
 export type ExportTone = "ok" | "warn" | "bad";
 
@@ -56,15 +57,58 @@ function onOff(value: "ON" | "OFF" | undefined, labels: [on: string, off: string
   return value === "ON" ? { value: labels[0], tone: onTone } : { value: labels[1], tone: "ok" as const };
 }
 
-export function buildExportData(check: Check): ExportData {
-  const r = check.report ?? { raw: {} };
-  const raw = r.raw ?? {};
+/** Ordena los chequeos: procedencia primero (trae más datos), luego el más reciente. */
+function byPriority(a: Check, b: Check): number {
+  if (a.level !== b.level) return a.level === "procedencia" ? -1 : 1;
+  return b.createdAt.localeCompare(a.createdAt);
+}
+
+/** Combina reportes: cada campo se toma del primer reporte que lo tenga. */
+export function mergeReports(reports: DeviceReport[]): DeviceReport {
+  const merged: DeviceReport = { raw: {} };
+  const seen = new Set<string>();
+  for (const report of reports) {
+    for (const [key, value] of Object.entries(report) as [keyof DeviceReport, unknown][]) {
+      if (key === "raw" || value === undefined || merged[key] !== undefined) continue;
+      (merged as unknown as Record<string, unknown>)[key] = value;
+    }
+    for (const [key, value] of Object.entries(report.raw ?? {})) {
+      const norm = key.toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (seen.has(norm)) continue;
+      seen.add(norm);
+      merged.raw[key] = value;
+    }
+  }
+  return merged;
+}
+
+function titleCase(text: string): string {
+  return text.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase());
+}
+
+function hasReplacement(history: string): boolean {
+  return !/^(no|none|n\/a|sin)\b/i.test(history.trim());
+}
+
+/**
+ * Arma los datos de la imagen. Recibe uno o más chequeos del mismo IMEI (por ejemplo el
+ * descarte y la procedencia) y los combina en una sola imagen.
+ */
+export function buildExportData(checks: Check[]): ExportData {
+  const sorted = checks.filter((c) => c.report).sort(byPriority);
+  const main = sorted[0] ?? checks[0];
+  const r = mergeReports(sorted.map((c) => c.report!));
+  const raw = r.raw;
+  const level = sorted.some((c) => c.level === "procedencia") ? "procedencia" : "descarte";
+  // Con varios chequeos el veredicto se recalcula sobre los datos combinados.
+  const verdict = sorted.length > 1 ? classify(r, { level }).verdict : main.verdict;
+
   const rows = (items: (ExportRow | false | undefined)[]) =>
     items.filter((row): row is ExportRow => !!row && present(row.value));
 
   const equipo = rows([
     { label: "Capacidad", value: capacity(rawValue(raw, "Config Description")) ?? "" },
-    { label: "IMEI", value: check.imei },
+    { label: "IMEI", value: main.imei },
     { label: "IMEI 2", value: rawValue(raw, "IMEI2", "IMEI 2") ?? "" },
     { label: "N° de serie", value: r.serial ?? "" },
   ]);
@@ -75,6 +119,7 @@ export function buildExportData(check: Check): ExportData {
     { label: "Fecha de compra", value: r.purchaseDate ? formatProviderDate(r.purchaseDate) : "" },
     { label: "Primera activación", value: r.firstActivationDate ? formatProviderDate(r.firstActivationDate) : "" },
     { label: "Garantía", value: r.warrantyStatus ? warrantyLabel(r.warrantyStatus) : "" },
+    { label: "Operador", value: r.carrier ? titleCase(r.carrier) : "" },
     !!r.activationPolicy && {
       label: "Liberado",
       value: /unlock/i.test(r.activationPolicy) ? "Sí" : r.activationPolicy,
@@ -85,7 +130,7 @@ export function buildExportData(check: Check): ExportData {
   const fmi = onOff(r.fmi, ["Activado", "Desactivado"], "warn");
   const mdm = onOff(r.mdm, ["Sí", "No"], "bad");
   const isClean = (v: string) => /\bclean\b|not\s*blacklisted/i.test(v);
-  const bloqueos = rows([
+  const estado = rows([
     fmi && { label: "Find My", ...fmi },
     mdm && { label: "Bloqueo MDM", ...mdm },
     !!r.blacklist && {
@@ -98,16 +143,22 @@ export function buildExportData(check: Check): ExportData {
       value: /lost|erased|stolen/i.test(r.icloudStatus) ? "Perdido / borrado" : /clean/i.test(r.icloudStatus) ? "Limpio" : r.icloudStatus,
       tone: /lost|erased|stolen/i.test(r.icloudStatus) ? "bad" : /clean/i.test(r.icloudStatus) ? "ok" : undefined,
     },
+    !!r.replacementHistory && {
+      label: "Reemplazo",
+      value: hasReplacement(r.replacementHistory) ? r.replacementHistory : "Sin reemplazos",
+      tone: hasReplacement(r.replacementHistory) ? "warn" : "ok",
+    },
   ]);
 
+  const latest = sorted.reduce((a, c) => (c.createdAt > a ? c.createdAt : a), main.createdAt);
   return {
-    model: r.model ?? check.model ?? "iPhone",
-    verdict: check.verdict,
+    model: r.model ?? main.model ?? "iPhone",
+    verdict,
     sections: [
       { title: "Equipo", rows: equipo },
       { title: "Compra", rows: compra },
-      { title: "Bloqueos", rows: bloqueos },
+      { title: "Bloqueos y estado", rows: estado },
     ].filter((s) => s.rows.length > 0),
-    footer: `Revisado el ${formatDate(check.createdAt)}`,
+    footer: `Revisado el ${formatDate(latest)}`,
   };
 }
