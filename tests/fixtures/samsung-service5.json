@@ -1,0 +1,15 @@
+{
+  "orderId": 113125609,
+  "duration": "1.44s",
+  "status": "success",
+  "imei": "353885XXXXX4438",
+  "price": "0.02",
+  "result": "IMEI: 353885XXXXX4438<br>Brand: Samsung Korea<br>Model: Galaxy S26 Ultra<br>Model Name: SM-S948B/DS<br>Blacklist Status: <span style='color:green;'>Clean</span><br>",
+  "object": {
+    "brand": "Samsung Korea",
+    "model": "Galaxy S26 Ultra",
+    "name": "SM-S948B/DS",
+    "gsmaBlacklisted": false,
+    "blacklistStatus": false
+  }
+}

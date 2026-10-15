@@ -68,6 +68,20 @@ Con un solo usuario y servicios en secuencia no debería afectar.
 | 6 | Blacklist Pro (GSMA) con historial | 0,09 | El 5 basta para decidir; el historial no cambia el veredicto. |
 | 11 | IMEI to Brand/Model/Name | 0,01 | La marca ya viene en el 5. Solo útil si algún día se quiere detectar la marca antes de cobrar más. |
 
+### Formatos verificados (prueba real del 15-10-2026, Galaxy S26 Ultra)
+
+Fixtures: `tests/fixtures/samsung-service5.json` y `tests/fixtures/service37.json` (IMEI y serie enmascarados).
+
+- **Servicio 5 con Samsung:** `object` = `{ brand: "Samsung Korea", model: "Galaxy S26 Ultra", name: "SM-S948B/DS",
+  gsmaBlacklisted: false, blacklistStatus: false }`. La marca no es solo "Samsung": comparar con *contiene*.
+- **Servicio 37** (`object: false`, ~2,3 s), claves del `result`:
+  `Model Info` (`MOBILE Galaxy S26 Ultra VIOLET LTL`), `Search Term`, `IMEI 1`, `Serial Number`, `Model Desc`
+  (`SM-S948B/DS`), `Model Name`, `Model Number` (`SM-S948BZVJLTL`), `Warranty Status` (`Warranty Active`),
+  `Estimated Warranty End Date` (`23-01-2028`, formato DD-MM-AAAA), `Production location` (vacío),
+  `Production Date` (`23-01-2026`), `Knox Guard` (`OFF`), `Knox Message`.
+- **No trae país ni compañía (CSC).** La única pista de origen son las 3 últimas letras de `Model Number` (aquí
+  `LTL`), que es el código de región/venta del producto. Su significado está por confirmar (sección 10).
+
 ### No existen en el catálogo
 
 - **Google FRP** (cuenta de Google): no hay servicio. Se verifica siempre en persona.
@@ -173,7 +187,12 @@ Como la de FRP siempre está, **en Android el mejor resultado es amarillo "Apto,
 mostrarlo como **verde con aviso** (título "Apto para comprar · revisar cuenta Google") para no perder la diferencia con
 un equipo realmente dudoso. _Decidir en la etapa 2._
 
-### Origen Samsung por CSC (por confirmar con respuestas reales)
+### Origen Samsung (por confirmar)
+
+El servicio 37 **no entrega el CSC** (ver sección 3). Lo único disponible es el código de 3 letras al final de
+`Model Number` (p. ej. `SM-S948BZVJLTL` → `LTL`). Hay que confirmar qué códigos corresponden a Chile liberado y a
+cada compañía, juntando ejemplos de equipos cuyo origen se conoce. Mientras tanto, el origen Samsung queda
+**desconocido** (sin razón amarilla por compañía). Tabla de referencia de CSC de software, que **no** es lo mismo:
 
 | CSC | Significado |
 |---|---|
@@ -202,8 +221,8 @@ Si el servicio entrega el nombre de la compañía en vez del código, se usa `CA
 
 Cada etapa queda funcionando antes de pasar a la siguiente.
 
-0. **Formatos reales.** ~~Inventario de servicios~~ (hecho el 15-10-2026, sección 3). Falta **una prueba real por
-   servicio** con un IMEI conocido: 37 con un Samsung y 25 con un Xiaomi (US$0,13 en total, más US$0,02 por cada 5).
+0. **Formatos reales.** ~~Inventario de servicios~~ y ~~Samsung (5 + 37)~~ hechos el 15-10-2026 (sección 3).
+   Falta el **25 con un Xiaomi** (US$0,05 + US$0,02 del 5).
    Guardar las respuestas como fixtures enmascarados en `tests/fixtures/`.
    _Listo cuando:_ hay un fixture real del 37 y del 25, y se sabe qué claves traen (CSC/compañía, país, KG, cuenta Mi).
 1. **Datos y tipos:** migración 002, `Platform`, `PLATFORM_LEVEL_SERVICES`, campos nuevos de `DeviceReport`.
@@ -218,9 +237,10 @@ Cada etapa queda funcionando antes de pasar a la siguiente.
 
 ## 10. Pendientes por verificar
 
-- Formato del `result` de los servicios 37 (Samsung) y 25 (Xiaomi): nombres exactos de las claves.
-- Si el 37 entrega el código CSC, el nombre de la compañía, el país de venta, o varios; y los códigos CSC reales de Chile.
-- Cómo reporta el 37 el estado de Knox Guard (texto exacto para "activo/bloqueado" y "limpio").
+- ~~Formato del servicio 37~~ (verificado). Falta el del **25 (Xiaomi)**.
+- Qué significa el código de región al final de `Model Number` en Samsung (`LTL` en el equipo de prueba) y cuáles
+  corresponden a Chile liberado y a cada compañía.
+- Texto exacto del 37 cuando Knox Guard está **activo** (solo se vio `OFF`).
 - Si el 25 trae país/región de venta además del estado de la cuenta Mi y el modo perdido.
 - Qué significa la columna "Límite" del panel.
 - Si la regla de "mismo IMEI en menos de 2 s" aplica igual a los servicios Android.
