@@ -46,7 +46,7 @@ export function ImeiInput({ value, onChange, disabled }: Props) {
         </span>
       </div>
       <p id="imei-help" className={`mt-1.5 text-sm ${showError ? "text-bad" : "text-muted"}`}>
-        {showError && !validation.ok ? validation.error : "Marca *#06# en el iPhone para ver el IMEI."}
+        {showError && !validation.ok ? validation.error : "Marca *#06# en el teléfono para ver el IMEI (sirve en iPhone y Android)."}
       </p>
     </div>
   );
