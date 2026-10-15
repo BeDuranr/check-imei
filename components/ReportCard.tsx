@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { isKnoxGuardActive } from "@/lib/classify";
-import { levelLabel } from "@/lib/constants";
+import { formatPrice, levelLabel, levelPrice } from "@/lib/constants";
 import { formatDate, formatDateTime, formatUsd } from "@/lib/format";
 import type { Check, DeviceReport, Origin } from "@/lib/types";
 import { ExportImageDialog } from "./ExportImageDialog";
@@ -251,7 +251,7 @@ export function ReportCard({ check, cached, onProcedencia, onRecheck, busy, comb
             disabled={busy}
             className="w-full rounded-xl bg-accent px-4 py-3 font-semibold text-accent-fg hover:brightness-110 disabled:opacity-50"
           >
-            Hacer chequeo de procedencia · US$0,75
+            Hacer chequeo completo · {formatPrice(levelPrice("iphone", "procedencia"))}
           </button>
         )}
       </div>

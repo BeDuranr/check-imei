@@ -87,15 +87,17 @@ tests/                    # tests de Vitest + fixtures con respuestas reales del
 - **Plataformas:** `iphone`, `samsung` y `android` (= otra marca, solo blacklist). Ver `PLATFORM_LEVEL_SERVICES` en
   `lib/constants.ts`.
 - **Detección automática (`runAuto`):** el botón "Revisar" corre primero el blacklist (5), que devuelve la marca;
-  `detectPlatform` elige la plataforma y se corren los servicios del nivel básico de esa marca (`baseLevel`). No hay
-  selector de marca. La única consulta con marca explícita es la procedencia de iPhone (47), que no trae la marca.
+  `detectPlatform` elige la plataforma y se corre el chequeo completo de esa marca (`baseLevel`). No hay selector de
+  marca ni chequeo básico en la interfaz.
+- **iPhone:** chequeo completo = 5 → 4 → 47 (US$0,79). El 4 (iCloud perdido) va porque el 47 no lo trae; el 47 va
+  al final para que tenga el máximo de tiempo. El descarte 5 → 1 → 4 ya no se ofrece (queda para chequeos antiguos).
   En el modo automático el `pending` se inserta con `platform = 'android'`, `level = 'descarte'` y `finishCheck`
   guarda la marca y el nivel reales.
 - **Samsung:** un solo "Chequeo completo" = 5 → 37 (US$0,10), guardado como `level = 'procedencia'`. Rojo si hay
   blacklist o Knox Guard activo; origen siempre desconocido (el 37 no trae país ni compañía); siempre agrega el
   recordatorio de cuentas Google/Samsung (FRP no se puede consultar por IMEI).
-- **Niveles iPhone:** `descarte` = servicios 5 → 1 → 4 en secuencia, con **2,5 s de espera** entre cada uno (el proveedor
-  rechaza el mismo IMEI dos veces en menos de 2 s). `procedencia` = servicio 47 (~30 s de respuesta).
+- **Niveles iPhone (antiguos):** `descarte` = servicios 5 → 1 → 4 en secuencia, con **2,5 s de espera** entre cada uno (el proveedor
+  rechaza el mismo IMEI dos veces en menos de 2 s). Las órdenes importadas del 47 se guardan como `procedencia` con solo `[47]`.
 - **Caché:** un chequeo `success` del mismo IMEI y nivel de los últimos 7 días se devuelve sin volver a cobrar,
   salvo con `force: true`.
 - **Duplicados:** índice único parcial `(imei, level) where status = 'pending'`. Un `pending` de más de 2 minutos se da

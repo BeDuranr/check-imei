@@ -13,18 +13,10 @@ import { ImeiInput } from "./ImeiInput";
 import { LoadingSteps } from "./LoadingSteps";
 import { ReportCard } from "./ReportCard";
 
-/** `auto` detecta la marca y corre lo básico; `procedencia` es la de iPhone (Apple Ultimate). */
-type Mode = "auto" | "procedencia";
-
-/** Para "consultar de nuevo": la procedencia de iPhone se repite tal cual; lo demás, con detección automática. */
-function modeFor(check: Pick<Check, "platform" | "level">): Mode {
-  return check.platform === "iphone" && check.level === "procedencia" ? "procedencia" : "auto";
-}
-
 export function CheckPage() {
   const searchParams = useSearchParams();
   const [input, setInput] = useState(() => searchParams.get("imei") ?? "");
-  const [loading, setLoading] = useState<Mode | null>(null);
+  const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ check: Check; cached: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [recent, setRecent] = useState<CheckSummary | null>(null);
@@ -50,17 +42,17 @@ export function CheckPage() {
     if (result && normalizeImei(value) !== result.check.imei) setResult(null);
   }
 
-  async function run(mode: Mode, force = false) {
+  /** Chequeo completo con detección automática de marca. */
+  async function run(force = false) {
     if (!imei || loading) return;
-    setLoading(mode);
+    setLoading(true);
     setError(null);
     setResult(null);
     try {
-      const body = mode === "auto" ? { imei, force } : { imei, level: "procedencia", platform: "iphone", force };
       const res = await apiFetch("/api/check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ imei, force }),
       });
       const data = (await res.json().catch(() => null)) as
         | { cached?: boolean; check?: Check; error?: string }
@@ -76,7 +68,7 @@ export function CheckPage() {
     } catch {
       setError("No se pudo conectar con el servidor. Revisa tu conexión.");
     } finally {
-      setLoading(null);
+      setLoading(false);
     }
   }
 
@@ -94,7 +86,7 @@ export function CheckPage() {
 
   return (
     <div className="space-y-4">
-      <ImeiInput value={input} onChange={changeInput} disabled={!!loading} />
+      <ImeiInput value={input} onChange={changeInput} disabled={loading} />
 
       {recent && !loading && (
         <div className="rounded-xl border border-accent/40 bg-accent/10 p-3 text-sm">
@@ -108,7 +100,7 @@ export function CheckPage() {
             </button>
             <button
               type="button"
-              onClick={() => run(modeFor(recent), true)}
+              onClick={() => run(true)}
               className="rounded-lg border border-line bg-card px-3 py-1.5 font-medium"
             >
               Consultar de nuevo (cobra)
@@ -117,14 +109,9 @@ export function CheckPage() {
         </div>
       )}
 
-      <CheckActions
-        disabled={!imei || !!loading}
-        loading={!!loading}
-        onAuto={() => run("auto")}
-        onIphoneProcedencia={() => run("procedencia")}
-      />
+      <CheckActions disabled={!imei || loading} loading={loading} onRun={() => run()} />
 
-      {loading && <LoadingSteps mode={loading} />}
+      {loading && <LoadingSteps />}
 
       {error && (
         <p role="alert" className="rounded-xl bg-bad-bg px-4 py-3 text-bad">
@@ -136,9 +123,9 @@ export function CheckPage() {
         <ReportCard
           check={result.check}
           cached={result.cached}
-          busy={!!loading}
-          onProcedencia={() => run("procedencia")}
-          onRecheck={result.cached ? () => run(modeFor(result.check), true) : undefined}
+          busy={loading}
+          onProcedencia={() => run()}
+          onRecheck={result.cached ? () => run(true) : undefined}
         />
       )}
     </div>

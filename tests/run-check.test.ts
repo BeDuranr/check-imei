@@ -77,10 +77,10 @@ describe("runServices", () => {
     expect(r.firstError).toEqual({ kind: "failed", message: "Invalid IMEI/SN" });
   });
 
-  it("procedencia: usa solo el servicio 47", async () => {
+  it("chequeo completo de iPhone con marca conocida: 5 → 4 → 47", async () => {
     const createOrder = vi.fn(async (_service: number) => success(9, 0.75, service47.result));
-    const r = await runServices("procedencia", IMEI, { createOrder });
-    expect(createOrder.mock.calls.map((c) => c[0])).toEqual([47]);
+    const r = await runServices("procedencia", IMEI, { createOrder, sleep: async () => {} });
+    expect(createOrder.mock.calls.map((c) => c[0])).toEqual([5, 4, 47]);
     expect(r.classification?.verdict).toBe("rojo");
     expect(r.classification?.origin).toBe("compañia");
   });
@@ -116,15 +116,35 @@ describe("runServices", () => {
 describe("runAuto (detección de marca)", () => {
   const sleep = async () => {};
 
-  it("Apple → descarte de iPhone (5 → 1 → 4)", async () => {
-    const createOrder = vi.fn(async (service: number): Promise<ProviderResult> =>
-      service === 5
-        ? success(1, 0.02, "Brand: Apple Inc<br>Blacklist Status: Clean", { brand: "Apple Inc", blacklistStatus: false })
-        : success(service, service === 1 ? 0.01 : 0.02, service === 1 ? service1.result : "iCloud Status: Clean", service === 1 ? service1.object : null),
-    );
+  it("Apple → chequeo completo de iPhone (5 → 4 → 47), con el lento al final", async () => {
+    const createOrder = vi.fn(async (service: number): Promise<ProviderResult> => {
+      if (service === 5) {
+        return success(1, 0.02, "Brand: Apple Inc<br>Blacklist Status: Clean", { brand: "Apple Inc", blacklistStatus: false });
+      }
+      if (service === 4) return success(2, 0.02, "iCloud Status: Clean", { lostMode: false });
+      return success(3, 0.75, service47.result, null);
+    });
     const r = await runAuto(IMEI, { createOrder, sleep });
-    expect(createOrder.mock.calls.map((c) => c[0])).toEqual([5, 1, 4]);
-    expect(r).toMatchObject({ platform: "iphone", level: "descarte", services: [5, 1, 4], status: "success", costUsd: 0.05 });
+    expect(createOrder.mock.calls.map((c) => c[0])).toEqual([5, 4, 47]);
+    expect(r).toMatchObject({ platform: "iphone", level: "procedencia", services: [5, 4, 47], status: "success", costUsd: 0.79 });
+    // Datos de los tres servicios combinados: iCloud del 4 y "Vendido por" del 47.
+    expect(r.report?.icloudStatus).toBe("Clean");
+    expect(r.report?.soldBy).toBe("AMERICA MOVIL PERU SAC");
+    expect(r.classification?.origin).toBe("compañia");
+  });
+
+  it("si Apple Ultimate no alcanza a responder, queda parcial con blacklist e iCloud", async () => {
+    let t = 0;
+    const createOrder = vi.fn(async (service: number): Promise<ProviderResult> => {
+      if (service === 5) return success(1, 0.02, "Blacklist Status: Clean", { brand: "Apple Inc", blacklistStatus: false });
+      if (service === 4) return success(2, 0.02, "iCloud Status: Clean", null);
+      t += 60_000;
+      return { ok: false, kind: "network", message: "Timeout", raw: null };
+    });
+    const r = await runAuto(IMEI, { createOrder, sleep, now: () => t });
+    expect(r.status).toBe("partial");
+    expect(r.costUsd).toBe(0.04);
+    expect(r.classification?.reasons).toContain("No se pudo revisar Apple Ultimate");
   });
 
   it("Samsung → chequeo completo (5 → 37) con los fixtures reales", async () => {

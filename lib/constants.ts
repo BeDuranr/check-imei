@@ -32,10 +32,12 @@ export const SERVICES: Record<number, { name: string; price: number }> = {
 /**
  * Servicios por plataforma y nivel, en orden. Lista vacía = nivel no disponible.
  * El blacklist (5) va primero: con la marca que devuelve se elige la plataforma (`runAuto`).
- * Samsung tiene un solo "chequeo completo", que se guarda como `procedencia`.
+ * El "chequeo completo" de cada marca se guarda como `procedencia`. En iPhone: blacklist, iCloud perdido (el 47 no
+ * lo trae) y Apple Ultimate al final, para que el servicio lento tenga el máximo de tiempo.
+ * El descarte de iPhone (5 → 1 → 4) ya no se ofrece; queda para leer chequeos antiguos.
  */
 export const PLATFORM_LEVEL_SERVICES: Record<Platform, Record<Level, number[]>> = {
-  iphone: { descarte: [5, 1, 4], procedencia: [47] },
+  iphone: { descarte: [5, 1, 4], procedencia: [5, 4, 47] },
   samsung: { descarte: [], procedencia: [5, 37] },
   android: { descarte: [5], procedencia: [] },
 };
@@ -47,20 +49,21 @@ export function detectPlatform(brand: string | undefined): Platform {
   return "android";
 }
 
-export function levelsFor(platform: Platform): Level[] {
-  return LEVELS.filter((level) => PLATFORM_LEVEL_SERVICES[platform][level].length > 0);
-}
+/** Nivel que corre el chequeo automático ("Revisar") para cada marca. */
+const BASE_LEVEL: Record<Platform, Level> = {
+  iphone: "procedencia",
+  samsung: "procedencia",
+  android: "descarte",
+};
 
-/** Nivel que corre el chequeo automático para cada marca (el primero disponible). */
 export function baseLevel(platform: Platform): Level {
-  return levelsFor(platform)[0];
+  return BASE_LEVEL[platform];
 }
 
-/** Nombre del nivel para mostrar. En Samsung, `procedencia` es el "Chequeo completo". */
+/** Nombre del nivel para mostrar. `procedencia` es el "Chequeo completo" de cada marca. */
 export function levelLabel(platform: Platform, level: Level): string {
-  if (platform === "android") return "Solo blacklist";
-  if (platform !== "iphone") return level === "procedencia" ? "Chequeo completo" : "Solo blacklist";
-  return level === "descarte" ? "Descarte rápido" : "Procedencia completa";
+  if (level === "procedencia") return "Chequeo completo";
+  return platform === "iphone" ? "Descarte rápido" : "Solo blacklist";
 }
 
 export function levelPrice(platform: Platform, level: Level): number {
