@@ -4,7 +4,8 @@ Extensión de la página de chequeo IMEI (hoy solo iPhone) para revisar también
 para reventa. Reutiliza todo lo que ya existe: login, validación de IMEI, historial agrupado por IMEI, caché, bloqueo de
 duplicados, imagen exportable e importación de órdenes.
 
-Estado: **propuesta**. Los IDs y precios de los servicios Android están marcados como _por confirmar_ (etapa 0).
+Estado: **propuesta**. IDs y precios confirmados con el catálogo del panel de imeicheck.com (15-10-2026). Falta probar
+cada servicio con un IMEI real para conocer el formato de respuesta (etapa 0).
 
 ---
 
@@ -38,47 +39,75 @@ frente a ti"_.
 
 ---
 
-## 3. Servicios del proveedor (por confirmar en la etapa 0)
+## 3. Servicios del proveedor
 
-La API no tiene un endpoint que liste servicios (`/services` devuelve la web), así que el catálogo hay que sacarlo del
-panel de imeicheck.com.
+Catálogo copiado del panel de imeicheck.com el 15-10-2026 (la API no tiene un endpoint que lo liste). La columna
+"Límite" viene del panel; su significado exacto está por confirmar (probablemente consultas simultáneas o por minuto).
+Con un solo usuario y servicios en secuencia no debería afectar.
 
-| Uso | Servicio buscado (nombre aproximado) | ID | Precio | Trae `object` |
+### Servicios elegidos
+
+| Uso | ID | Servicio | Precio (USD) | Trae `object` |
 |---|---|---|---|---|
-| Todas las marcas | Blacklist GSMA (ya se usa) | 5 | US$0,02 | sí (`blacklistStatus`, `brand`, `model`) |
-| Samsung descarte | Samsung Knox Guard / KG lock status | _?_ | _?_ | _?_ |
-| Samsung procedencia | Samsung Info (CSC/carrier, país, garantía, fecha de fabricación/activación) | _?_ | _?_ | _?_ |
-| Samsung (opcional) | Samsung Reactivation Lock / Find My Mobile ON/OFF | _?_ | _?_ | _?_ |
-| Xiaomi | Xiaomi Mi Account / Mi Lock ON/OFF (+ país de venta si lo trae) | _?_ | _?_ | _?_ |
-| Otro Android | Brand & Model / IMEI info genérico (si existe y es barato) | _?_ | _?_ | _?_ |
+| Todas las marcas: blacklist + marca/modelo | 5 | Blacklist Status (GSMA) | 0,02 | sí |
+| Samsung: info + Knox Guard | **37** | Samsung Info & KNOX GUARD (S1) | 0,08 | **no** (parsear `result`) |
+| Xiaomi: cuenta Mi + info | **25** | XIAOMI MI LOCK & INFO | 0,05 | **no** |
+| Motorola | 63 | Motorola Info | 0,05 | no |
+| Huawei | 17 | Huawei IMEI Info | 0,07 | sí |
+| Honor | 58 | Honor Info | 0,05 | no |
+| OnePlus | 27 | ONEPLUS IMEI INFO | 0,04 | sí |
+| Google Pixel | 72 | Google Pixel Info + Warranty (S2) | 0,10 | no |
 
-Criterio para elegir entre servicios parecidos: **precio bajo y que responda en la misma petición** (sin quedar
-pendiente). Si un servicio tarda más de ~50 s no sirve con `maxDuration = 60`.
+### Alternativas descartadas (y por qué)
+
+| ID | Servicio | Precio | Motivo |
+|---|---|---|---|
+| 8 | Samsung Info (S1) | 0,04 | No trae Knox Guard; el 37 trae ambos por solo US$0,04 más. |
+| 36 | Samsung Info (S1) + Blacklist | 0,06 | No trae Knox Guard. El blacklist ya lo da el 5. |
+| 21 | SAMSUNG INFO & KNOX GUARD (S2) | 0,14 | Lo mismo que el 37, más caro. Queda como **respaldo** si el 37 falla o trae menos datos. |
+| 6 | Blacklist Pro (GSMA) con historial | 0,09 | El 5 basta para decidir; el historial no cambia el veredicto. |
+| 11 | IMEI to Brand/Model/Name | 0,01 | La marca ya viene en el 5. Solo útil si algún día se quiere detectar la marca antes de cobrar más. |
+
+### No existen en el catálogo
+
+- **Google FRP** (cuenta de Google): no hay servicio. Se verifica siempre en persona.
+- **Samsung Reactivation Lock / Find My Mobile**: no hay servicio. Se verifica en persona junto con FRP.
 
 ---
 
 ## 4. Niveles de chequeo propuestos
 
-Se mantienen los dos niveles. Lo que cambia es qué servicios corre cada uno según la **plataforma/marca**.
+Para Android los servicios son baratos, así que **no hace falta separar descarte y procedencia**: un solo
+**"Chequeo completo"** por marca. iPhone queda exactamente como está.
 
-| Marca | Descarte rápido | Procedencia completa |
-|---|---|---|
-| iPhone | 1 → 5 → 4 (sin cambios) | 47 (sin cambios) |
-| Samsung | 5 → KG lock (→ Reactivation Lock si es barato) | Samsung Info (CSC, país, garantía) |
-| Xiaomi | 5 → Mi Lock | Si existe un servicio con país/región de venta; si no, no hay procedencia |
-| Otro Android | 5 | No disponible (se oculta el botón) |
+| Marca | Botones | Servicios | Costo |
+|---|---|---|---|
+| iPhone | Descarte rápido / Procedencia completa | 1 → 5 → 4 / 47 | US$0,05 / US$0,75 (sin cambios) |
+| Samsung | Chequeo completo | 5 → 37 | **US$0,10** |
+| Xiaomi | Chequeo completo | 5 → 25 | **US$0,07** |
+| Motorola | Chequeo completo | 5 → 63 | US$0,07 |
+| Huawei | Chequeo completo | 5 → 17 | US$0,09 |
+| Honor | Chequeo completo | 5 → 58 | US$0,07 |
+| OnePlus | Chequeo completo | 5 → 27 | US$0,06 |
+| Pixel | Chequeo completo | 5 → 72 | US$0,12 |
+| Otro Android | Solo blacklist | 5 | US$0,02 |
 
-Se mantiene la regla de **2,5 s de espera** entre servicios del mismo IMEI.
+- En la base de datos el chequeo completo de Android se guarda con `level = 'procedencia'` (es el nivel con datos de
+  compra), así el historial agrupado, la caché y la imagen exportable funcionan sin cambios. "Otro Android" (solo blacklist)
+  se guarda como `descarte`.
+- Se mantiene la regla de **2,5 s de espera** entre servicios del mismo IMEI.
+- Si el servicio de la marca falla, el chequeo queda `partial` con el blacklist (igual que el descarte hoy).
+- Prioridad de implementación: **Samsung y Xiaomi** primero; las demás marcas se agregan después con el mismo patrón
+  (solo cambia el ID del servicio y las claves del parser).
 
 ### Cómo se elige la marca
 
-1. En la página **Chequear**, antes de los botones, un selector: **iPhone · Samsung · Xiaomi · Otro Android**
-   (por defecto iPhone, se recuerda la última elección). Quien revisa el equipo lo tiene en la mano, así que elegirlo es
-   más barato y rápido que adivinarlo.
-2. Validación cruzada: el servicio 5 devuelve `Brand`. Si no calza con lo elegido (p. ej. elegiste Samsung y dice
-   Apple), se agrega la razón amarilla _"La marca reportada (X) no coincide con la elegida"_.
-3. Opcional, sin costo: precargar la marca a partir del TAC (primeros 8 dígitos del IMEI) con una tabla pequeña de
-   TAC conocidos. Solo como sugerencia, no reemplaza el selector.
+1. En la página **Chequear**, antes de los botones, un selector: **iPhone · Samsung · Xiaomi · Otra marca**
+   (al elegir "Otra marca" se despliegan Motorola, Huawei, Honor, OnePlus, Pixel y "Otro Android"). Por defecto
+   iPhone; se recuerda la última elección. Quien revisa el equipo lo tiene en la mano, así que elegirlo es gratis.
+2. Validación cruzada: el servicio 5 corre primero y devuelve `Brand`. Si no calza con lo elegido (p. ej. elegiste
+   Samsung y dice Apple), **se detiene antes de cobrar el servicio de la marca** y avisa:
+   _"El IMEI es de un equipo X, no Samsung. Cambia la marca y vuelve a intentar."_ Solo se cobran los US$0,02 del 5.
 
 ---
 
@@ -88,7 +117,7 @@ Nueva migración `supabase/migrations/002_android.sql` (no se edita la 001):
 
 ```sql
 alter table public.checks add column platform text not null default 'iphone'
-  check (platform in ('iphone', 'samsung', 'xiaomi', 'android'));
+  check (platform in ('iphone', 'samsung', 'xiaomi', 'motorola', 'huawei', 'honor', 'oneplus', 'pixel', 'android'));
 create index checks_platform_idx on public.checks (platform);
 -- `level` y `services` siguen igual; los servicios dependen de (platform, level).
 ```
@@ -104,13 +133,13 @@ create index checks_platform_idx on public.checks (platform);
 
 | Archivo | Cambio |
 |---|---|
-| `lib/constants.ts` | `Platform` (`iphone`/`samsung`/`xiaomi`/`android`), `PLATFORM_LABEL`, y `LEVEL_SERVICES` pasa a `PLATFORM_LEVEL_SERVICES[platform][level]` (lista vacía = nivel no disponible). Precios por plataforma para los botones. |
-| `lib/types.ts` | `DeviceReport` agrega: `brand`, `salesCode` (CSC), `knoxGuard`, `reactivationLock`, `miLock`, `simLock`, `manufactureDate`. `Check` agrega `platform`. |
+| `lib/constants.ts` | `Platform` (`iphone`, `samsung`, `xiaomi`, `motorola`, `huawei`, `honor`, `oneplus`, `pixel`, `android`), `PLATFORM_LABEL`, y `LEVEL_SERVICES` pasa a `PLATFORM_LEVEL_SERVICES[platform][level]` (lista vacía = nivel no disponible). Precios por plataforma para los botones. |
+| `lib/types.ts` | `DeviceReport` agrega: `brand`, `salesCode` (CSC), `knoxGuard`, `miLock`, `simLock`, `manufactureDate`. `Check` agrega `platform`. |
 | `lib/parse-result.ts` | Nuevas claves en `FIELD_KEYS` según los formatos reales (etapa 0) y `BOOLEAN_LABELS` para los booleanos de `object`. |
 | `lib/classify.ts` | Reglas por plataforma (sección 7). `CSC_CARRIER_CODES` editable, igual que `CARRIER_SELLERS`. |
 | `lib/run-check.ts` | Recibe `platform` y toma los servicios de `PLATFORM_LEVEL_SERVICES`. Sin otros cambios. |
 | `app/api/check/route.ts` | Body: `{ imei, level, platform, force? }`. Validar que el nivel exista para esa plataforma (400 si no). |
-| `lib/import-order.ts` | `serviceFromName` reconoce los servicios Android de procedencia (Samsung Info). |
+| `lib/import-order.ts` | `serviceFromName` reconoce los servicios Android de procedencia (servicios 37 y 25). |
 | `lib/combine.ts` | Sin cambios de lógica; `classify` recibe la plataforma del chequeo. |
 | `lib/export-fields.ts` | Filas según plataforma: en Android, "Código de venta (CSC)", "Knox Guard", "Cuenta Mi", etc. Sin filas de iCloud/Find My. |
 | `components/CheckPage.tsx` + `CheckActions.tsx` | Selector de marca y botones con el precio de esa marca; ocultar "Procedencia" donde no exista. |
@@ -129,11 +158,11 @@ create index checks_platform_idx on public.checks (platform);
 - Xiaomi: Mi Account en **modo perdido**.
 
 ### Amarillo (precaución), cualquiera de:
-- Siempre en Android: _"Verifica en persona que el vendedor elimine su cuenta de Google y restablezca el equipo frente a
-  ti (FRP)"_.
+- Siempre en Android: _"Verifica en persona que el vendedor elimine su cuenta de Google (y Samsung) y restablezca el equipo
+  frente a ti (FRP)"_.
 - `origin === "compañia"` (CSC de compañía en Samsung).
 - País de venta distinto de Chile.
-- Samsung Reactivation Lock ON o Xiaomi Mi Account ON (el vendedor debe cerrar sesión en persona, como FMI en iPhone).
+- Xiaomi Mi Account ON (el vendedor debe cerrar sesión en persona, como FMI en iPhone).
 - `simLock` bloqueado a una compañía.
 - La marca reportada no coincide con la elegida.
 - Servicio fallido o falta procedencia (si la marca tiene procedencia).
@@ -162,7 +191,7 @@ Si el servicio entrega el nombre de la compañía en vez del código, se usa `CA
 
 - **Chequear:** selector de marca con botones grandes (mobile-first). Los botones de nivel muestran el precio de esa
   marca. Ayuda del IMEI: `*#06#` funciona igual en Android; en Samsung también en Ajustes → Acerca del teléfono.
-- **Tarjeta de resultado (Android):** Modelo, Marca, Código de venta / compañía, País, Knox Guard, Reactivation Lock o
+- **Tarjeta de resultado (Android):** Modelo, Marca, Código de venta / compañía, País, Knox Guard o
   Cuenta Mi, Blacklist, Garantía (si existe). Aviso fijo de FRP.
 - **Historial:** marca visible en cada fila y filtro por marca.
 - **Imagen exportable:** mismas secciones (Equipo, Compra, Bloqueos y estado) con los campos de Android.
@@ -173,10 +202,10 @@ Si el servicio entrega el nombre de la compañía en vez del código, se usa `CA
 
 Cada etapa queda funcionando antes de pasar a la siguiente.
 
-0. **Inventario de servicios (sin código).** Desde el panel de imeicheck.com, sacar ID, nombre y precio de los servicios
-   de la tabla de la sección 3. Luego, **una prueba real por servicio** con un IMEI Android conocido (costo estimado
-   US$0,10–0,50 en total) y guardar las respuestas como fixtures enmascarados en `tests/fixtures/`.
-   _Listo cuando:_ la tabla de la sección 3 está completa y hay un fixture real por servicio.
+0. **Formatos reales.** ~~Inventario de servicios~~ (hecho el 15-10-2026, sección 3). Falta **una prueba real por
+   servicio** con un IMEI conocido: 37 con un Samsung y 25 con un Xiaomi (US$0,13 en total, más US$0,02 por cada 5).
+   Guardar las respuestas como fixtures enmascarados en `tests/fixtures/`.
+   _Listo cuando:_ hay un fixture real del 37 y del 25, y se sabe qué claves traen (CSC/compañía, país, KG, cuenta Mi).
 1. **Datos y tipos:** migración 002, `Platform`, `PLATFORM_LEVEL_SERVICES`, campos nuevos de `DeviceReport`.
    _Listo cuando:_ los tests actuales siguen pasando y los chequeos viejos quedan como `iphone`.
 2. **Parser y clasificación Android** con tests sobre los fixtures reales.
@@ -189,10 +218,11 @@ Cada etapa queda funcionando antes de pasar a la siguiente.
 
 ## 10. Pendientes por verificar
 
-- Qué servicios Android ofrece realmente imeicheck.com, IDs, precios y si traen `object`.
-- Si Samsung Info entrega CSC, nombre de compañía, o ambos; y los códigos CSC reales de Chile.
-- Si existe algún servicio que muestre el **estado de FRP** de forma confiable (casi ningún proveedor lo tiene).
-- Si Xiaomi tiene un servicio con país/región de venta (para tener "procedencia" en Xiaomi).
+- Formato del `result` de los servicios 37 (Samsung) y 25 (Xiaomi): nombres exactos de las claves.
+- Si el 37 entrega el código CSC, el nombre de la compañía, el país de venta, o varios; y los códigos CSC reales de Chile.
+- Cómo reporta el 37 el estado de Knox Guard (texto exacto para "activo/bloqueado" y "limpio").
+- Si el 25 trae país/región de venta además del estado de la cuenta Mi y el modo perdido.
+- Qué significa la columna "Límite" del panel.
 - Si la regla de "mismo IMEI en menos de 2 s" aplica igual a los servicios Android.
 - Tiempos de respuesta de cada servicio (deben caber en 60 s).
 
@@ -200,7 +230,7 @@ Cada etapa queda funcionando antes de pasar a la siguiente.
 
 ## 11. Fuera de alcance (por ahora)
 
-- Chequeos específicos de Huawei, Motorola, Oppo, Honor o Pixel más allá del blacklist (quedan como "Otro Android").
-- Detección automática de la marca con un servicio pagado.
-- Verificación de FRP por IMEI (salvo que la etapa 0 encuentre un servicio confiable).
+- Marcas sin servicio propio en el catálogo (Oppo, Vivo, Realme, ZTE, etc.): solo blacklist ("Otro Android").
+- Detección automática de la marca con un servicio pagado (el 11 cuesta US$0,01 si algún día se quiere).
+- Verificación de FRP y de Samsung Reactivation Lock por IMEI: no existen en el catálogo.
 - Tablets, relojes y otros dispositivos.
