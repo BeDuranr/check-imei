@@ -1,6 +1,7 @@
 // Selecciona y traduce solo los datos importantes de un chequeo para la imagen exportable.
 // Lógica pura (sin canvas) para poder testearla.
 
+import { isKnoxGuardActive } from "./classify";
 import { combineChecks } from "./combine";
 import { PLATFORM_LABEL } from "./constants";
 import { formatDate, formatProviderDate } from "./format";
@@ -114,8 +115,8 @@ export function buildExportData(checks: Check[]): ExportData {
   const estado = rows([
     !!r.knoxGuard && {
       label: "Knox Guard",
-      value: /^off$|nots*registered/i.test(r.knoxGuard) ? "No inscrito" : `Activo (${r.knoxGuard})`,
-      tone: /^off$|nots*registered/i.test(r.knoxGuard) ? "ok" : "bad",
+      value: isKnoxGuardActive(r.knoxGuard) ? `Activo (${r.knoxGuard})` : "No inscrito",
+      tone: isKnoxGuardActive(r.knoxGuard) ? "bad" : "ok",
     },
     fmi && { label: "Find My", ...fmi },
     mdm && { label: "Bloqueo MDM", ...mdm },

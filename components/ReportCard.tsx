@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { isKnoxGuardActive } from "@/lib/classify";
 import { levelLabel } from "@/lib/constants";
 import { formatDate, formatDateTime, formatUsd } from "@/lib/format";
 import type { Check, DeviceReport, Origin } from "@/lib/types";
@@ -48,7 +49,7 @@ export function buildSummary(check: Check): string {
   if (r.soldBy) lines.push(`Vendido por: ${r.soldBy}`);
   if (r.purchaseCountry) lines.push(`País de compra: ${r.purchaseCountry}`);
   if (r.purchaseDate) lines.push(`Fecha de compra: ${r.purchaseDate}`);
-  if (check.platform === "samsung") {
+  if (check.platform !== "iphone") {
     lines.push(`Knox Guard: ${r.knoxGuard ?? "—"} | Blacklist: ${r.blacklist ?? "—"}`);
   } else {
     lines.push(`Find My: ${r.fmi ?? "—"} | MDM: ${r.mdm ?? "—"} | Blacklist: ${r.blacklist ?? "—"}`);
@@ -137,13 +138,26 @@ export function ReportCard({ check, cached, onProcedencia, onRecheck, busy, comb
           </div>
         )}
 
-        {check.report && check.platform === "samsung" && (
+        {check.report && check.platform !== "iphone" && (
           <dl className="grid grid-cols-2 gap-x-4 gap-y-3 border-t border-line pt-4">
             <div className="col-span-2">
               <Field label="Modelo" value={r.model} strong />
             </div>
-            <Field label="Knox Guard" value={r.knoxGuard} tone={r.knoxGuard ? (/^off$/i.test(r.knoxGuard) ? "ok" : "bad") : undefined} strong />
+            {check.platform === "android" && <Field label="Marca" value={r.brand} />}
+            {check.platform === "samsung" && (
+              <Field
+                label="Knox Guard"
+                value={r.knoxGuard}
+                tone={r.knoxGuard ? (isKnoxGuardActive(r.knoxGuard) ? "bad" : "ok") : undefined}
+                strong
+              />
+            )}
             <Field label="Blacklist" value={r.blacklist} tone={blacklistTone(r.blacklist)} strong />
+          </dl>
+        )}
+
+        {check.report && check.platform === "samsung" && (
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
             <Field
               label="Garantía"
               value={r.warrantyStatus && (r.warrantyEnd ? `${r.warrantyStatus} (hasta ${r.warrantyEnd})` : r.warrantyStatus)}
@@ -155,7 +169,7 @@ export function ReportCard({ check, cached, onProcedencia, onRecheck, busy, comb
           </dl>
         )}
 
-        {check.report && check.platform !== "samsung" && (
+        {check.report && check.platform === "iphone" && (
           <dl className="grid grid-cols-2 gap-x-4 gap-y-3 border-t border-line pt-4">
             <div className="col-span-2">
               <Field label="Modelo" value={r.model} strong />
@@ -230,7 +244,7 @@ export function ReportCard({ check, cached, onProcedencia, onRecheck, busy, comb
           )}
         </div>
 
-        {isDescarte && check.verdict !== "rojo" && check.verdict !== null && onProcedencia && (
+        {check.platform === "iphone" && isDescarte && check.verdict !== "rojo" && check.verdict !== null && onProcedencia && (
           <button
             type="button"
             onClick={onProcedencia}

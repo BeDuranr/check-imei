@@ -41,6 +41,9 @@ export function planImport(order: Extract<OrderResult, { ok: true }>): ImportPla
     level: "procedencia",
     createdAt: order.createdAt,
     result: {
+      platform: "iphone",
+      level: "procedencia",
+      services: [47],
       status: "success",
       entries: [{ service: 47, ok: true, orderId: order.orderId, price: order.price, raw: order.raw }],
       orderIds: [order.orderId],

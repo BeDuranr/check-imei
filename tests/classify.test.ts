@@ -120,9 +120,20 @@ describe("classify Samsung", () => {
     expect(classify({ ...real, blacklist: "Blacklisted" }, opts).verdict).toBe("rojo");
   });
 
-  it("servicio fallido o marca distinta: amarillo", () => {
+  it("servicio fallido: amarillo", () => {
     expect(classify(real, { ...opts, missingServices: ["Samsung Info y Knox Guard"] }).verdict).toBe("amarillo");
-    expect(classify({ ...real, brand: "Apple Inc" }, opts).verdict).toBe("amarillo");
+  });
+
+  it("Knox Guard 'not registered' en texto largo cuenta como limpio", () => {
+    expect(classify({ ...real, knoxGuard: "This device is not registered" }, opts).verdict).toBe("verde");
+  });
+
+  it("otra marca: solo blacklist, amarillo con la marca en la razón", () => {
+    const otra = { brand: "Xiaomi", blacklist: "Clean", raw: {} };
+    const result = classify(otra, { level: "descarte", platform: "android" });
+    expect(result.verdict).toBe("amarillo");
+    expect(result.reasons[0]).toBe("Marca sin chequeo completo todavía (Xiaomi): solo se revisó el blacklist");
+    expect(classify({ ...otra, blacklist: "Blacklisted" }, { level: "descarte", platform: "android" }).verdict).toBe("rojo");
   });
 
   it("no usa las reglas de iPhone (sin 'Vendido por' no resta)", () => {

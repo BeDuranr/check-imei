@@ -1,7 +1,7 @@
 import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { groupChecks } from "./combine";
-import { CACHE_DAYS, PLATFORM_LEVEL_SERVICES, SERVICES, type Level, type Platform } from "./constants";
+import { baseLevel, CACHE_DAYS, PLATFORM_LEVEL_SERVICES, SERVICES, type Level, type Platform } from "./constants";
 import { userMessage } from "./errors";
 import type { RunResult, ServiceEntry } from "./run-check";
 import type { Check, CheckStatus, CheckSummary, Decision, Device, DeviceReport, Origin, Verdict } from "./types";
@@ -132,6 +132,25 @@ export async function findRecentSuccess(imei: string, level: Level, platform: Pl
   return data ? toCheck(data) : null;
 }
 
+/**
+ * Caché del chequeo automático: el último chequeo exitoso de los últimos días que corresponda al nivel
+ * básico de su marca (descarte en iPhone, chequeo completo en Samsung, blacklist en otras).
+ */
+export async function findRecentBaseCheck(imei: string): Promise<Check | null> {
+  const since = new Date(Date.now() - CACHE_DAYS * 86_400_000).toISOString();
+  const { data, error } = await db()
+    .from("checks")
+    .select("*")
+    .eq("imei", imei)
+    .eq("status", "success")
+    .gte("created_at", since)
+    .order("created_at", { ascending: false })
+    .limit(10);
+  if (error) throw error;
+  const row = (data ?? []).map((r) => toCheck(r as CheckRow)).find((c) => c.level === baseLevel(c.platform));
+  return row ?? null;
+}
+
 /** Marca como fallidos los `pending` abandonados para que no bloqueen nuevas consultas. */
 export async function expireStalePending(imei: string, level: Level): Promise<void> {
   const before = new Date(Date.now() - STALE_PENDING_MS).toISOString();
@@ -161,6 +180,10 @@ export async function insertPending(imei: string, level: Level, platform: Platfo
 
 function resultColumns(result: RunResult) {
   return {
+    // En el chequeo automático la marca y el nivel se conocen recién al terminar.
+    platform: result.platform,
+    level: result.level,
+    services: result.services,
     status: result.status,
     model: result.report?.model ?? null,
     order_ids: result.orderIds,
@@ -198,17 +221,10 @@ export async function findCheckIdByOrderId(orderId: number): Promise<string | nu
 }
 
 /** Guarda un chequeo ya terminado (orden importada), con la fecha real de la orden. */
-export async function insertCompletedCheck(imei: string, level: Level, createdAt: string, result: RunResult): Promise<Check> {
+export async function insertCompletedCheck(imei: string, createdAt: string, result: RunResult): Promise<Check> {
   const { data, error } = await db()
     .from("checks")
-    .insert({
-      imei,
-      platform: "iphone",
-      level,
-      services: PLATFORM_LEVEL_SERVICES.iphone[level],
-      created_at: createdAt,
-      ...resultColumns(result),
-    })
+    .insert({ imei, created_at: createdAt, ...resultColumns(result) })
     .select("*")
     .single<CheckRow>();
   if (error) throw error;

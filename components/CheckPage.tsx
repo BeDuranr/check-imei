@@ -3,47 +3,31 @@
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { apiFetch, readError } from "@/lib/client-fetch";
-import { levelLabel, PLATFORMS, type Level, type Platform } from "@/lib/constants";
+import { levelLabel } from "@/lib/constants";
 import { formatDateTime } from "@/lib/format";
 import { normalizeImei, validateImei } from "@/lib/imei";
 import type { Check, CheckSummary } from "@/lib/types";
 import { BALANCE_REFRESH } from "./BalanceBadge";
-import { CheckActions, PlatformPicker } from "./CheckActions";
+import { CheckActions } from "./CheckActions";
 import { ImeiInput } from "./ImeiInput";
 import { LoadingSteps } from "./LoadingSteps";
 import { ReportCard } from "./ReportCard";
 
-const PLATFORM_KEY = "platform";
+/** `auto` detecta la marca y corre lo básico; `procedencia` es la de iPhone (Apple Ultimate). */
+type Mode = "auto" | "procedencia";
+
+/** Para "consultar de nuevo": la procedencia de iPhone se repite tal cual; lo demás, con detección automática. */
+function modeFor(check: Pick<Check, "platform" | "level">): Mode {
+  return check.platform === "iphone" && check.level === "procedencia" ? "procedencia" : "auto";
+}
 
 export function CheckPage() {
   const searchParams = useSearchParams();
   const [input, setInput] = useState(() => searchParams.get("imei") ?? "");
-  const [loading, setLoading] = useState<Level | null>(null);
+  const [loading, setLoading] = useState<Mode | null>(null);
   const [result, setResult] = useState<{ check: Check; cached: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [recent, setRecent] = useState<CheckSummary | null>(null);
-  const [platform, setPlatform] = useState<Platform>("iphone");
-
-  // Recuerda la última marca elegida (solo en este navegador).
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(PLATFORM_KEY) as Platform | null;
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- preferencia guardada, se lee al montar
-      if (saved && PLATFORMS.includes(saved)) setPlatform(saved);
-    } catch {
-      // sin almacenamiento: queda iPhone
-    }
-  }, []);
-
-  function changePlatform(next: Platform) {
-    setPlatform(next);
-    setError(null);
-    try {
-      localStorage.setItem(PLATFORM_KEY, next);
-    } catch {
-      // sin almacenamiento
-    }
-  }
 
   const validation = validateImei(input);
   const imei = validation.ok ? validation.imei : null;
@@ -54,12 +38,7 @@ export function CheckPage() {
     const ctrl = new AbortController();
     apiFetch(`/api/checks?imei=${imei}&pageSize=1`, { signal: ctrl.signal })
       .then((res) => (res.ok ? res.json() : null))
-      .then((data: { items: CheckSummary[] } | null) => {
-        const last = data?.items[0] ?? null;
-        setRecent(last);
-        // Mismo IMEI, mismo equipo: se usa la marca con que ya se revisó.
-        if (last) setPlatform(last.platform);
-      })
+      .then((data: { items: CheckSummary[] } | null) => setRecent(data?.items[0] ?? null))
       .catch(() => {});
     return () => ctrl.abort();
   }, [imei]);
@@ -71,16 +50,17 @@ export function CheckPage() {
     if (result && normalizeImei(value) !== result.check.imei) setResult(null);
   }
 
-  async function run(level: Level, force = false, forPlatform: Platform = platform) {
+  async function run(mode: Mode, force = false) {
     if (!imei || loading) return;
-    setLoading(level);
+    setLoading(mode);
     setError(null);
     setResult(null);
     try {
+      const body = mode === "auto" ? { imei, force } : { imei, level: "procedencia", platform: "iphone", force };
       const res = await apiFetch("/api/check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imei, level, platform: forPlatform, force }),
+        body: JSON.stringify(body),
       });
       const data = (await res.json().catch(() => null)) as
         | { cached?: boolean; check?: Check; error?: string }
@@ -119,7 +99,8 @@ export function CheckPage() {
       {recent && !loading && (
         <div className="rounded-xl border border-accent/40 bg-accent/10 p-3 text-sm">
           <p>
-            Ya revisaste este IMEI el {formatDateTime(recent.createdAt)} ({levelLabel(recent.platform, recent.level).toLowerCase()}).
+            Ya revisaste este IMEI el {formatDateTime(recent.createdAt)} (
+            {levelLabel(recent.platform, recent.level).toLowerCase()}).
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
             <button type="button" onClick={showRecent} className="rounded-lg bg-accent px-3 py-1.5 font-medium text-accent-fg">
@@ -127,7 +108,7 @@ export function CheckPage() {
             </button>
             <button
               type="button"
-              onClick={() => run(recent.level, true, recent.platform)}
+              onClick={() => run(modeFor(recent), true)}
               className="rounded-lg border border-line bg-card px-3 py-1.5 font-medium"
             >
               Consultar de nuevo (cobra)
@@ -136,11 +117,14 @@ export function CheckPage() {
         </div>
       )}
 
-      <PlatformPicker value={platform} onChange={changePlatform} disabled={!!loading} />
+      <CheckActions
+        disabled={!imei || !!loading}
+        loading={!!loading}
+        onAuto={() => run("auto")}
+        onIphoneProcedencia={() => run("procedencia")}
+      />
 
-      <CheckActions platform={platform} disabled={!imei || !!loading} loading={loading} onRun={(level) => run(level)} />
-
-      {loading && <LoadingSteps level={loading} platform={platform} />}
+      {loading && <LoadingSteps mode={loading} />}
 
       {error && (
         <p role="alert" className="rounded-xl bg-bad-bg px-4 py-3 text-bad">
@@ -153,8 +137,8 @@ export function CheckPage() {
           check={result.check}
           cached={result.cached}
           busy={!!loading}
-          onProcedencia={() => run("procedencia", false, result.check.platform)}
-          onRecheck={result.cached ? () => run(result.check.level, true, result.check.platform) : undefined}
+          onProcedencia={() => run("procedencia")}
+          onRecheck={result.cached ? () => run(modeFor(result.check), true) : undefined}
         />
       )}
     </div>

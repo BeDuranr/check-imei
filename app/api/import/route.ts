@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     const plan = planImport(order);
     if (!plan.ok) return jsonError(plan.error, 400);
 
-    const check = await insertCompletedCheck(plan.imei, plan.level, plan.createdAt, plan.result);
+    const check = await insertCompletedCheck(plan.imei, plan.createdAt, plan.result);
     await upsertDeviceModel(plan.imei, check.model).catch((err) => console.error("[import] upsert device", err));
     return NextResponse.json({ id: check.id, existing: false });
   } catch (err) {

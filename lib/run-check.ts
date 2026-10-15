@@ -1,8 +1,16 @@
 import { classify } from "./classify";
-import { PLATFORM_BRAND_PATTERN, PLATFORM_LEVEL_SERVICES, SERVICES, type Level, type Platform } from "./constants";
+import {
+  baseLevel,
+  BLACKLIST_SERVICE,
+  detectPlatform,
+  PLATFORM_LEVEL_SERVICES,
+  SERVICES,
+  type Level,
+  type Platform,
+} from "./constants";
 import type { ProviderErrorKind } from "./errors";
 import type { ProviderResult } from "./imeicheck";
-import { buildReport } from "./parse-result";
+import { buildReport, type ReportSource } from "./parse-result";
 import type { CheckStatus, Classification, DeviceReport } from "./types";
 
 /** Espera entre servicios: el proveedor rechaza el mismo IMEI dos veces en menos de 2 s. */
@@ -25,6 +33,10 @@ export interface ServiceEntry {
 }
 
 export interface RunResult {
+  /** Marca y nivel con que se guarda el chequeo (en el modo automático, los detectados). */
+  platform: Platform;
+  level: Level;
+  services: number[];
   status: Exclude<CheckStatus, "pending">;
   entries: ServiceEntry[];
   orderIds: number[];
@@ -34,8 +46,6 @@ export interface RunResult {
   /** Primer error real del proveedor (se guarda en la base de datos, no se muestra). */
   errorMessage: string | null;
   firstError: { kind: ProviderErrorKind; message: string } | null;
-  /** Marca reportada por el blacklist cuando no coincide con la plataforma elegida (se detuvo antes de seguir cobrando). */
-  brandMismatch?: string;
 }
 
 export interface RunDeps {
@@ -46,32 +56,34 @@ export interface RunDeps {
 
 const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-export async function runServices(
-  level: Level,
-  imei: string,
-  deps: RunDeps,
-  platform: Platform = "iphone",
-): Promise<RunResult> {
-  const sleep = deps.sleep ?? defaultSleep;
+/** Estado de una ejecución: se comparte entre etapas para respetar la espera y el presupuesto de tiempo. */
+interface Progress {
+  sleep: (ms: number) => Promise<void>;
+  now: () => number;
+  started: number;
+  entries: ServiceEntry[];
+  sources: ReportSource[];
+}
+
+function startProgress(deps: RunDeps): Progress {
   const now = deps.now ?? Date.now;
-  const services = PLATFORM_LEVEL_SERVICES[platform][level];
-  const started = now();
-  const entries: ServiceEntry[] = [];
-  const successes: { html: string; object: Record<string, unknown> | null }[] = [];
+  return { sleep: deps.sleep ?? defaultSleep, now, started: now(), entries: [], sources: [] };
+}
 
-  for (let i = 0; i < services.length; i++) {
-    const service = services[i];
-    if (i > 0) await sleep(SERVICE_GAP_MS);
+/** Ejecuta servicios en secuencia. Se detiene ante errores que se repetirían (IMEI inválido, key, saldo). */
+async function execute(services: number[], imei: string, deps: RunDeps, progress: Progress): Promise<void> {
+  for (const service of services) {
+    if (progress.entries.length > 0) await progress.sleep(SERVICE_GAP_MS);
 
-    const remaining = TIME_BUDGET_MS - (now() - started);
+    const remaining = TIME_BUDGET_MS - (progress.now() - progress.started);
     if (remaining < MIN_CALL_MS) {
-      entries.push({ service, ok: false, kind: "network", message: "Skipped: time budget exceeded", raw: null });
-      break;
+      progress.entries.push({ service, ok: false, kind: "network", message: "Skipped: time budget exceeded", raw: null });
+      return;
     }
 
     const r = await deps.createOrder(service, imei, Math.min(MAX_CALL_MS, remaining - 1_000));
     if (r.ok) {
-      entries.push({
+      progress.entries.push({
         service,
         ok: true,
         orderId: r.orderId,
@@ -79,45 +91,35 @@ export async function runServices(
         durationMs: r.durationMs,
         raw: r.raw,
       });
-      successes.push({ html: r.resultHtml, object: r.object });
-
-      // El blacklist trae la marca: si no es la elegida, no se cobran los servicios siguientes.
-      const brand = typeof r.object?.brand === "string" ? r.object.brand : undefined;
-      if (service === 5 && brand && i < services.length - 1 && !PLATFORM_BRAND_PATTERN[platform].test(brand)) {
-        return {
-          status: "failed",
-          entries,
-          orderIds: [r.orderId],
-          costUsd: Math.round(r.price * 100) / 100,
-          report: null,
-          classification: null,
-          errorMessage: `Brand mismatch: ${brand}`,
-          firstError: null,
-          brandMismatch: brand,
-        };
-      }
+      progress.sources.push({ html: r.resultHtml, object: r.object });
     } else {
-      entries.push({ service, ok: false, kind: r.kind, message: r.message, raw: r.raw });
+      progress.entries.push({ service, ok: false, kind: r.kind, message: r.message, raw: r.raw });
       // Un IMEI inválido, key mala o falta de saldo se repetiría en los siguientes: no seguir.
-      if (r.kind !== "network") break;
+      if (r.kind !== "network") return;
     }
   }
+}
 
+function finish(platform: Platform, level: Level, services: number[], progress: Progress): RunResult {
+  const { entries } = progress;
   const ok = entries.filter((e) => e.ok);
+  const okServices = new Set(ok.map((e) => e.service));
   const status: RunResult["status"] =
-    ok.length === services.length ? "success" : ok.length > 0 ? "partial" : "failed";
+    services.every((s) => okServices.has(s)) ? "success" : ok.length > 0 ? "partial" : "failed";
   const failure = entries.find((e) => !e.ok);
 
   let report: DeviceReport | null = null;
   let classification: Classification | null = null;
   if (ok.length > 0) {
-    report = buildReport(successes);
-    const okServices = new Set(ok.map((e) => e.service));
+    report = buildReport(progress.sources);
     const missingServices = services.filter((s) => !okServices.has(s)).map((s) => SERVICES[s].name);
     classification = classify(report, { level, platform, missingServices });
   }
 
   return {
+    platform,
+    level,
+    services,
     status,
     entries,
     orderIds: ok.map((e) => e.orderId!).filter((id) => Number.isFinite(id)),
@@ -127,4 +129,41 @@ export async function runServices(
     errorMessage: failure?.message ?? null,
     firstError: failure ? { kind: failure.kind ?? "error", message: failure.message ?? "" } : null,
   };
+}
+
+/** Ejecuta los servicios de una marca y nivel conocidos (p. ej. la procedencia de un iPhone). */
+export async function runServices(
+  level: Level,
+  imei: string,
+  deps: RunDeps,
+  platform: Platform = "iphone",
+): Promise<RunResult> {
+  const services = PLATFORM_LEVEL_SERVICES[platform][level];
+  const progress = startProgress(deps);
+  await execute(services, imei, deps, progress);
+  return finish(platform, level, services, progress);
+}
+
+/**
+ * Chequeo con detección automática de marca: el blacklist (5) va primero y devuelve la marca;
+ * después se corren los servicios básicos de esa marca. Cuesta lo mismo que elegirla a mano.
+ */
+export async function runAuto(imei: string, deps: RunDeps): Promise<RunResult> {
+  const progress = startProgress(deps);
+  await execute([BLACKLIST_SERVICE], imei, deps, progress);
+
+  const blacklistOk = progress.entries[0]?.ok === true;
+  const platform = detectPlatform(blacklistOk ? buildReport(progress.sources).brand : undefined);
+  const level = baseLevel(platform);
+  const services = PLATFORM_LEVEL_SERVICES[platform][level];
+
+  if (blacklistOk) {
+    await execute(
+      services.filter((s) => s !== BLACKLIST_SERVICE),
+      imei,
+      deps,
+      progress,
+    );
+  }
+  return finish(platform, level, services, progress);
 }

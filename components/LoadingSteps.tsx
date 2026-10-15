@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PLATFORM_LEVEL_SERVICES, SERVICES, type Level, type Platform } from "@/lib/constants";
 
 // El servidor hace todo en una sola petición; los pasos avanzan según el tiempo típico
 // (≈0,5 s por servicio + 2,5 s de espera entre cada uno).
 const STEP_MS = 3_000;
+
+// Chequeo automático: primero el blacklist (que da la marca), luego lo propio de cada marca.
+const AUTO_STEPS = ["Detectando la marca y revisando blacklist", "Revisando bloqueos según la marca"];
 
 function Spinner() {
   return (
@@ -16,7 +18,8 @@ function Spinner() {
   );
 }
 
-export function LoadingSteps({ level, platform }: { level: Level; platform: Platform }) {
+/** `auto` = chequeo con detección de marca; `procedencia` = Apple Ultimate (un servicio lento, ~30 s). */
+export function LoadingSteps({ mode }: { mode: "auto" | "procedencia" }) {
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
@@ -27,10 +30,7 @@ export function LoadingSteps({ level, platform }: { level: Level; platform: Plat
 
   const seconds = Math.floor(elapsed / 1000);
 
-  const services = PLATFORM_LEVEL_SERVICES[platform][level];
-
-  // Un solo servicio lento (Apple Ultimate, ~30 s): indicador con segundos en vez de pasos.
-  if (services.length === 1) {
+  if (mode === "procedencia") {
     return (
       <div className="flex items-center gap-3 rounded-xl border border-line bg-card p-4" role="status">
         <Spinner />
@@ -42,16 +42,14 @@ export function LoadingSteps({ level, platform }: { level: Level; platform: Plat
     );
   }
 
-  const steps = services.map((s) => SERVICES[s].name);
-  const current = Math.min(steps.length - 1, Math.floor(elapsed / STEP_MS));
-
+  const current = Math.min(AUTO_STEPS.length - 1, Math.floor(elapsed / STEP_MS));
   return (
     <div className="rounded-xl border border-line bg-card p-4" role="status">
       <ol className="space-y-2">
-        {steps.map((name, i) => (
+        {AUTO_STEPS.map((name, i) => (
           <li key={name} className={`flex items-center gap-3 ${i > current ? "text-muted" : ""}`}>
             {i < current ? <span className="w-4 text-center text-ok">✓</span> : i === current ? <Spinner /> : <span className="w-4 text-center">·</span>}
-            Revisando {name}…
+            {name}…
           </li>
         ))}
       </ol>

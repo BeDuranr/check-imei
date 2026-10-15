@@ -84,8 +84,13 @@ tests/                    # tests de Vitest + fixtures con respuestas reales del
 
 ## Reglas de dominio
 
-- **Plataformas:** `iphone` y `samsung` (`PLATFORM_LEVEL_SERVICES` en `lib/constants.ts`). El servicio 5 va primero y
-  devuelve la marca: si no coincide con la elegida, se detiene sin cobrar los siguientes (`brandMismatch`).
+- **Plataformas:** `iphone`, `samsung` y `android` (= otra marca, solo blacklist). Ver `PLATFORM_LEVEL_SERVICES` en
+  `lib/constants.ts`.
+- **Detección automática (`runAuto`):** el botón "Revisar" corre primero el blacklist (5), que devuelve la marca;
+  `detectPlatform` elige la plataforma y se corren los servicios del nivel básico de esa marca (`baseLevel`). No hay
+  selector de marca. La única consulta con marca explícita es la procedencia de iPhone (47), que no trae la marca.
+  En el modo automático el `pending` se inserta con `platform = 'android'`, `level = 'descarte'` y `finishCheck`
+  guarda la marca y el nivel reales.
 - **Samsung:** un solo "Chequeo completo" = 5 → 37 (US$0,10), guardado como `level = 'procedencia'`. Rojo si hay
   blacklist o Knox Guard activo; origen siempre desconocido (el 37 no trae país ni compañía); siempre agrega el
   recordatorio de cuentas Google/Samsung (FRP no se puede consultar por IMEI).
