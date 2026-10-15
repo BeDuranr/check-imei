@@ -44,6 +44,10 @@ describe("buildExportData", () => {
     expect(procedencia.verdict).toBe("rojo");
   });
 
+  it("incluye el modelo con su código como primera fila", () => {
+    expect(procedencia.sections[0].rows[0]).toEqual({ label: "Modelo", value: "iPhone 16 Pro Max (A3296)" });
+  });
+
   it("extrae y traduce los datos de compra", () => {
     expect(row(procedencia, "Capacidad")?.value).toBe("256 GB");
     expect(row(procedencia, "IMEI")?.value).toBe("355564840000000");
@@ -109,6 +113,8 @@ describe("buildExportData", () => {
     const data = buildExportData([makeCheck("procedencia", report, "samsung")]);
     expect(data.model).toBe("Galaxy S26 Ultra");
     expect(data.verdict).toBe("verde");
+    expect(row(data, "Modelo")?.value).toBe("Galaxy S26 Ultra (SM-S948B/DS)");
+    expect(row(data, "Color")?.value).toBe("Violet");
     expect(row(data, "Knox Guard")).toMatchObject({ value: "No inscrito", tone: "ok" });
     expect(row(data, "Blacklist")).toMatchObject({ value: "Limpio", tone: "ok" });
     expect(row(data, "Garantía")).toMatchObject({ value: "Vigente hasta 23-01-2028", tone: "ok" });

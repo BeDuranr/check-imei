@@ -47,6 +47,23 @@ function capacity(configDescription: string | undefined): string | undefined {
   return m ? `${m[1]} ${m[2].toUpperCase()}` : undefined;
 }
 
+/** "Galaxy S26 Ultra" + "SM-S948B/DS" → "Galaxy S26 Ultra (SM-S948B/DS)"; si el detalle ya incluye el nombre, se usa tal cual. */
+function modelWithCode(model: string | undefined, detail: string | undefined): string {
+  if (!model) return detail ?? "";
+  if (!detail || detail === model) return model;
+  return detail.toLowerCase().includes(model.toLowerCase()) ? detail : `${model} (${detail})`;
+}
+
+/** Samsung: "MOBILE Galaxy S26 Ultra VIOLET LTL" → "Violet" (lo que queda entre el modelo y el código de región). */
+function samsungColor(modelInfo: string | undefined, model: string | undefined, region: string | undefined): string | undefined {
+  if (!modelInfo || !model) return undefined;
+  const i = modelInfo.toLowerCase().indexOf(model.toLowerCase());
+  if (i < 0) return undefined;
+  let rest = modelInfo.slice(i + model.length).trim();
+  if (region && rest.toUpperCase().endsWith(region)) rest = rest.slice(0, -region.length).trim();
+  return rest ? titleCase(rest) : undefined;
+}
+
 function warrantyLabel(status: string): string {
   if (/out of warranty|no coverage|expired/i.test(status)) return "Sin garantía (vencida)";
   if (/applecare/i.test(status)) return status;
@@ -82,6 +99,8 @@ export function buildExportData(checks: Check[]): ExportData {
     items.filter((row): row is ExportRow => !!row && present(row.value));
 
   const equipo = rows([
+    { label: "Modelo", value: modelWithCode(r.model, rawValue(raw, "Model Desc", "Model Name", "name")) },
+    { label: "Color", value: samsungColor(rawValue(raw, "Model Info"), r.model, r.regionCode) ?? "" },
     { label: "Capacidad", value: capacity(rawValue(raw, "Config Description")) ?? "" },
     { label: "IMEI", value: main.imei },
     { label: "IMEI 2", value: rawValue(raw, "IMEI2", "IMEI 2") ?? "" },
