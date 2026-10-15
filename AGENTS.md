@@ -149,3 +149,4 @@ proveedor para probar** sin que el usuario lo pida; usa los tests y los fixtures
 ## Fuera de alcance
 
 Otras marcas (Samsung, etc.), múltiples usuarios, consultas masivas e integración de pagos.
+El soporte Android está planificado en [`docs/plan-android.md`](docs/plan-android.md) (propuesta, aún no implementado).
