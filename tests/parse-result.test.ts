@@ -3,6 +3,8 @@ import { buildReport, decodeEntities, htmlToLines, parseResultHtml } from "../li
 import service1 from "./fixtures/service1.json";
 import service4 from "./fixtures/service4.json";
 import service5 from "./fixtures/service5.json";
+import samsung5 from "./fixtures/samsung-service5.json";
+import service37 from "./fixtures/service37.json";
 import service47 from "./fixtures/service47.json";
 
 describe("parseResultHtml", () => {
@@ -69,6 +71,26 @@ describe("buildReport", () => {
     const report = buildReport([{ html: "", object: { lostMode: true, blacklistStatus: false } }]);
     expect(report.icloudStatus).toBe("Lost Mode");
     expect(report.blacklist).toBe("Clean");
+  });
+
+  it("Samsung real (5 → 37): Knox Guard, garantía, región y marca", () => {
+    const report = buildReport([
+      { html: samsung5.result, object: samsung5.object },
+      { html: service37.result },
+    ]);
+    expect(report).toMatchObject({
+      brand: "Samsung Korea",
+      model: "Galaxy S26 Ultra",
+      blacklist: "Clean",
+      knoxGuard: "OFF",
+      serial: "R5GLXXXXXXX",
+      modelNumber: "SM-S948BZVJLTL",
+      regionCode: "LTL",
+      warrantyStatus: "Warranty Active",
+      warrantyEnd: "23-01-2028",
+      productionDate: "23-01-2026",
+    });
+    expect(report.raw["Knox Message"]).toBe("This device is not registered under Samsung Knox Guard");
   });
 
   it("combina varios servicios sin pisar la primera aparición", () => {

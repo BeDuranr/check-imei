@@ -1,4 +1,4 @@
-import type { Level } from "./constants";
+import type { Level, Platform } from "./constants";
 import type { Classification, DeviceReport, Origin } from "./types";
 
 /**
@@ -54,11 +54,46 @@ function isYes(value: string | undefined): boolean {
 
 export interface ClassifyOptions {
   level: Level;
+  platform?: Platform;
   /** Nombres de servicios que no se pudieron completar (chequeo parcial). */
   missingServices?: string[];
 }
 
-export function classify(report: DeviceReport, { level, missingServices = [] }: ClassifyOptions): Classification {
+/** Recordatorio fijo en Android: FRP y la cuenta Samsung no se pueden consultar por IMEI. */
+export const ANDROID_ACCOUNTS_REASON =
+  "Verifica en persona que el vendedor cierre sus cuentas de Google y Samsung y restablezca el equipo frente a ti";
+
+function isKnoxGuardActive(value: string): boolean {
+  return !/^off$|nots*registered|nos*registrado/i.test(value.trim());
+}
+
+/**
+ * Samsung: el servicio 37 no trae país ni compañía, así que el origen queda desconocido y no resta.
+ * El mejor resultado es verde con el recordatorio de cuentas (no se puede verificar por IMEI).
+ */
+function classifySamsung(report: DeviceReport, missingServices: string[]): Classification {
+  const red: string[] = [];
+  const yellow: string[] = [];
+  if (report.blacklist && !isClean(report.blacklist)) red.push(`Reportado en blacklist (${report.blacklist})`);
+  if (report.knoxGuard && isKnoxGuardActive(report.knoxGuard)) {
+    red.push(`Knox Guard activo (${report.knoxGuard}): equipo financiado o bloqueable por la compañía`);
+  }
+  if (report.brand && !/samsung/i.test(report.brand)) {
+    yellow.push(`La marca reportada (${report.brand}) no es Samsung`);
+  }
+  for (const name of missingServices) yellow.push(`No se pudo revisar ${name}`);
+
+  const origin: Origin = "desconocido";
+  if (red.length) return { verdict: "rojo", origin, reasons: [...red, ...yellow, ANDROID_ACCOUNTS_REASON] };
+  if (yellow.length) return { verdict: "amarillo", origin, reasons: [...yellow, ANDROID_ACCOUNTS_REASON] };
+  return { verdict: "verde", origin, reasons: ["Sin blacklist ni Knox Guard", ANDROID_ACCOUNTS_REASON] };
+}
+
+export function classify(
+  report: DeviceReport,
+  { level, platform = "iphone", missingServices = [] }: ClassifyOptions,
+): Classification {
+  if (platform === "samsung") return classifySamsung(report, missingServices);
   const origin = detectOrigin(report.soldBy);
   const red: string[] = [];
   const yellow: string[] = [];

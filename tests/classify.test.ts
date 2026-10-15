@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { classify, detectOrigin } from "../lib/classify";
+import { ANDROID_ACCOUNTS_REASON, classify, detectOrigin } from "../lib/classify";
 import { buildReport } from "../lib/parse-result";
 import type { DeviceReport } from "../lib/types";
 import service1 from "./fixtures/service1.json";
 import service4 from "./fixtures/service4.json";
 import service5 from "./fixtures/service5.json";
+import samsung5 from "./fixtures/samsung-service5.json";
+import service37 from "./fixtures/service37.json";
 import service47 from "./fixtures/service47.json";
 
 const clean: DeviceReport = {
@@ -97,5 +99,33 @@ describe("classify", () => {
     const report: DeviceReport = { fmi: "OFF", raw: {} };
     const result = classify(report, { level: "descarte", missingServices: ["Blacklist"] });
     expect(result.reasons).toContain("No se pudo revisar Blacklist");
+  });
+});
+
+describe("classify Samsung", () => {
+  const real = buildReport([{ html: samsung5.result, object: samsung5.object }, { html: service37.result }]);
+  const opts = { level: "procedencia" as const, platform: "samsung" as const };
+
+  it("equipo real limpio: verde, origen desconocido y recordatorio de cuentas", () => {
+    expect(classify(real, opts)).toEqual({
+      verdict: "verde",
+      origin: "desconocido",
+      reasons: ["Sin blacklist ni Knox Guard", ANDROID_ACCOUNTS_REASON],
+    });
+  });
+
+  it("Knox Guard activo o blacklist: rojo", () => {
+    expect(classify({ ...real, knoxGuard: "ON" }, opts).verdict).toBe("rojo");
+    expect(classify({ ...real, knoxGuard: "Active" }, opts).reasons[0]).toContain("Knox Guard activo");
+    expect(classify({ ...real, blacklist: "Blacklisted" }, opts).verdict).toBe("rojo");
+  });
+
+  it("servicio fallido o marca distinta: amarillo", () => {
+    expect(classify(real, { ...opts, missingServices: ["Samsung Info y Knox Guard"] }).verdict).toBe("amarillo");
+    expect(classify({ ...real, brand: "Apple Inc" }, opts).verdict).toBe("amarillo");
+  });
+
+  it("no usa las reglas de iPhone (sin 'Vendido por' no resta)", () => {
+    expect(classify(real, opts).reasons).not.toContain("No se pudo determinar quién vendió el equipo");
   });
 });

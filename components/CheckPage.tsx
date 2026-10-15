@@ -3,15 +3,17 @@
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { apiFetch, readError } from "@/lib/client-fetch";
-import { LEVEL_LABEL, type Level } from "@/lib/constants";
+import { levelLabel, PLATFORMS, type Level, type Platform } from "@/lib/constants";
 import { formatDateTime } from "@/lib/format";
 import { normalizeImei, validateImei } from "@/lib/imei";
 import type { Check, CheckSummary } from "@/lib/types";
 import { BALANCE_REFRESH } from "./BalanceBadge";
-import { CheckActions } from "./CheckActions";
+import { CheckActions, PlatformPicker } from "./CheckActions";
 import { ImeiInput } from "./ImeiInput";
 import { LoadingSteps } from "./LoadingSteps";
 import { ReportCard } from "./ReportCard";
+
+const PLATFORM_KEY = "platform";
 
 export function CheckPage() {
   const searchParams = useSearchParams();
@@ -20,6 +22,28 @@ export function CheckPage() {
   const [result, setResult] = useState<{ check: Check; cached: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [recent, setRecent] = useState<CheckSummary | null>(null);
+  const [platform, setPlatform] = useState<Platform>("iphone");
+
+  // Recuerda la última marca elegida (solo en este navegador).
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(PLATFORM_KEY) as Platform | null;
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- preferencia guardada, se lee al montar
+      if (saved && PLATFORMS.includes(saved)) setPlatform(saved);
+    } catch {
+      // sin almacenamiento: queda iPhone
+    }
+  }, []);
+
+  function changePlatform(next: Platform) {
+    setPlatform(next);
+    setError(null);
+    try {
+      localStorage.setItem(PLATFORM_KEY, next);
+    } catch {
+      // sin almacenamiento
+    }
+  }
 
   const validation = validateImei(input);
   const imei = validation.ok ? validation.imei : null;
@@ -30,7 +54,12 @@ export function CheckPage() {
     const ctrl = new AbortController();
     apiFetch(`/api/checks?imei=${imei}&pageSize=1`, { signal: ctrl.signal })
       .then((res) => (res.ok ? res.json() : null))
-      .then((data: { items: CheckSummary[] } | null) => setRecent(data?.items[0] ?? null))
+      .then((data: { items: CheckSummary[] } | null) => {
+        const last = data?.items[0] ?? null;
+        setRecent(last);
+        // Mismo IMEI, mismo equipo: se usa la marca con que ya se revisó.
+        if (last) setPlatform(last.platform);
+      })
       .catch(() => {});
     return () => ctrl.abort();
   }, [imei]);
@@ -42,7 +71,7 @@ export function CheckPage() {
     if (result && normalizeImei(value) !== result.check.imei) setResult(null);
   }
 
-  async function run(level: Level, force = false) {
+  async function run(level: Level, force = false, forPlatform: Platform = platform) {
     if (!imei || loading) return;
     setLoading(level);
     setError(null);
@@ -51,7 +80,7 @@ export function CheckPage() {
       const res = await apiFetch("/api/check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imei, level, force }),
+        body: JSON.stringify({ imei, level, platform: forPlatform, force }),
       });
       const data = (await res.json().catch(() => null)) as
         | { cached?: boolean; check?: Check; error?: string }
@@ -90,7 +119,7 @@ export function CheckPage() {
       {recent && !loading && (
         <div className="rounded-xl border border-accent/40 bg-accent/10 p-3 text-sm">
           <p>
-            Ya revisaste este IMEI el {formatDateTime(recent.createdAt)} ({LEVEL_LABEL[recent.level].toLowerCase()}).
+            Ya revisaste este IMEI el {formatDateTime(recent.createdAt)} ({levelLabel(recent.platform, recent.level).toLowerCase()}).
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
             <button type="button" onClick={showRecent} className="rounded-lg bg-accent px-3 py-1.5 font-medium text-accent-fg">
@@ -98,7 +127,7 @@ export function CheckPage() {
             </button>
             <button
               type="button"
-              onClick={() => run(recent.level, true)}
+              onClick={() => run(recent.level, true, recent.platform)}
               className="rounded-lg border border-line bg-card px-3 py-1.5 font-medium"
             >
               Consultar de nuevo (cobra)
@@ -107,9 +136,11 @@ export function CheckPage() {
         </div>
       )}
 
-      <CheckActions disabled={!imei || !!loading} loading={loading} onRun={(level) => run(level)} />
+      <PlatformPicker value={platform} onChange={changePlatform} disabled={!!loading} />
 
-      {loading && <LoadingSteps level={loading} />}
+      <CheckActions platform={platform} disabled={!imei || !!loading} loading={loading} onRun={(level) => run(level)} />
+
+      {loading && <LoadingSteps level={loading} platform={platform} />}
 
       {error && (
         <p role="alert" className="rounded-xl bg-bad-bg px-4 py-3 text-bad">
@@ -122,8 +153,8 @@ export function CheckPage() {
           check={result.check}
           cached={result.cached}
           busy={!!loading}
-          onProcedencia={() => run("procedencia")}
-          onRecheck={result.cached ? () => run(result.check.level, true) : undefined}
+          onProcedencia={() => run("procedencia", false, result.check.platform)}
+          onRecheck={result.cached ? () => run(result.check.level, true, result.check.platform) : undefined}
         />
       )}
     </div>

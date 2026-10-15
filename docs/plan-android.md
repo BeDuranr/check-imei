@@ -4,7 +4,7 @@ Extensión de la página de chequeo IMEI (hoy solo iPhone) para revisar también
 para reventa. Reutiliza todo lo que ya existe: login, validación de IMEI, historial agrupado por IMEI, caché, bloqueo de
 duplicados, imagen exportable e importación de órdenes.
 
-Estado: **propuesta**. IDs y precios confirmados con el catálogo del panel de imeicheck.com (15-10-2026). Falta probar
+Estado: **Samsung implementado** (5 → 37). Xiaomi y otras marcas: propuesta. IDs y precios confirmados con el catálogo del panel de imeicheck.com (15-10-2026). Falta probar
 cada servicio con un IMEI real para conocer el formato de respuesta (etapa 0).
 
 ---

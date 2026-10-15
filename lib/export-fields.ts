@@ -2,6 +2,7 @@
 // Lógica pura (sin canvas) para poder testearla.
 
 import { combineChecks } from "./combine";
+import { PLATFORM_LABEL } from "./constants";
 import { formatDate, formatProviderDate } from "./format";
 import type { Check, Verdict } from "./types";
 
@@ -49,6 +50,7 @@ function warrantyLabel(status: string): string {
   if (/out of warranty|no coverage|expired/i.test(status)) return "Sin garantía (vencida)";
   if (/applecare/i.test(status)) return status;
   if (/limited warranty|in warranty/i.test(status)) return "Garantía limitada de Apple (vigente)";
+  if (/warranty active|active/i.test(status)) return "Vigente";
   return status;
 }
 
@@ -83,6 +85,7 @@ export function buildExportData(checks: Check[]): ExportData {
     { label: "IMEI", value: main.imei },
     { label: "IMEI 2", value: rawValue(raw, "IMEI2", "IMEI 2") ?? "" },
     { label: "N° de serie", value: r.serial ?? "" },
+    { label: "Número de modelo", value: r.modelNumber ?? "" },
   ]);
 
   const compra = rows([
@@ -90,7 +93,13 @@ export function buildExportData(checks: Check[]): ExportData {
     { label: "País de compra", value: r.purchaseCountry ?? "", tone: r.purchaseCountry ? (/^chile$/i.test(r.purchaseCountry) ? "ok" : "warn") : undefined },
     { label: "Fecha de compra", value: r.purchaseDate ? formatProviderDate(r.purchaseDate) : "" },
     { label: "Primera activación", value: r.firstActivationDate ? formatProviderDate(r.firstActivationDate) : "" },
-    { label: "Garantía", value: r.warrantyStatus ? warrantyLabel(r.warrantyStatus) : "" },
+    {
+      label: "Garantía",
+      value: r.warrantyStatus ? warrantyLabel(r.warrantyStatus) + (r.warrantyEnd ? ` hasta ${r.warrantyEnd}` : "") : "",
+      tone: r.warrantyStatus && /active/i.test(r.warrantyStatus) ? "ok" : undefined,
+    },
+    { label: "Fecha de producción", value: r.productionDate ?? "" },
+    { label: "Código de región", value: r.regionCode ?? "" },
     { label: "Operador", value: r.carrier ? titleCase(r.carrier) : "" },
     !!r.activationPolicy && {
       label: "Liberado",
@@ -103,6 +112,11 @@ export function buildExportData(checks: Check[]): ExportData {
   const mdm = onOff(r.mdm, ["Sí", "No"], "bad");
   const isClean = (v: string) => /\bclean\b|not\s*blacklisted/i.test(v);
   const estado = rows([
+    !!r.knoxGuard && {
+      label: "Knox Guard",
+      value: /^off$|nots*registered/i.test(r.knoxGuard) ? "No inscrito" : `Activo (${r.knoxGuard})`,
+      tone: /^off$|nots*registered/i.test(r.knoxGuard) ? "ok" : "bad",
+    },
     fmi && { label: "Find My", ...fmi },
     mdm && { label: "Bloqueo MDM", ...mdm },
     !!r.blacklist && {
@@ -123,7 +137,7 @@ export function buildExportData(checks: Check[]): ExportData {
   ]);
 
   return {
-    model: r.model ?? main.model ?? "iPhone",
+    model: r.model ?? main.model ?? PLATFORM_LABEL[main.platform],
     verdict: main.verdict,
     sections: [
       { title: "Equipo", rows: equipo },

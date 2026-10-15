@@ -6,12 +6,15 @@ import type { Check, DeviceReport } from "../lib/types";
 import service1 from "./fixtures/service1.json";
 import service4 from "./fixtures/service4.json";
 import service5 from "./fixtures/service5.json";
+import samsung5 from "./fixtures/samsung-service5.json";
+import service37 from "./fixtures/service37.json";
 import service47 from "./fixtures/service47.json";
 
-function makeCheck(level: Check["level"], report: DeviceReport): Check {
-  const { verdict, origin, reasons } = classify(report, { level });
+function makeCheck(level: Check["level"], report: DeviceReport, platform: Check["platform"] = "iphone"): Check {
+  const { verdict, origin, reasons } = classify(report, { level, platform });
   return {
     id: "00000000-0000-0000-0000-000000000000",
+    platform,
     imei: "355564840000000",
     level,
     status: "success",
@@ -96,6 +99,24 @@ describe("buildExportData", () => {
       expect(data.verdict).toBe("rojo");
       expect(data.sections.map((s) => s.title)).toEqual(["Equipo", "Compra", "Bloqueos y estado"]);
     }
+  });
+
+  it("Samsung: Knox Guard, garantía con vencimiento y número de modelo; sin datos de iPhone", () => {
+    const report = buildReport([
+      { html: samsung5.result, object: samsung5.object },
+      { html: service37.result },
+    ]);
+    const data = buildExportData([makeCheck("procedencia", report, "samsung")]);
+    expect(data.model).toBe("Galaxy S26 Ultra");
+    expect(data.verdict).toBe("verde");
+    expect(row(data, "Knox Guard")).toMatchObject({ value: "No inscrito", tone: "ok" });
+    expect(row(data, "Blacklist")).toMatchObject({ value: "Limpio", tone: "ok" });
+    expect(row(data, "Garantía")).toMatchObject({ value: "Vigente hasta 23-01-2028", tone: "ok" });
+    expect(row(data, "Número de modelo")?.value).toBe("SM-S948BZVJLTL");
+    expect(row(data, "Código de región")?.value).toBe("LTL");
+    expect(row(data, "Fecha de producción")?.value).toBe("23-01-2026");
+    expect(row(data, "Find My")).toBeUndefined();
+    expect(row(data, "Lugar de compra")).toBeUndefined();
   });
 
   it("no incluye el texto completo del reporte", () => {

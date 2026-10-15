@@ -2,7 +2,7 @@
 // historial por IMEI. Lógica pura, usable en cliente y servidor.
 
 import { classify } from "./classify";
-import type { Level } from "./constants";
+import type { Level, Platform } from "./constants";
 import type { Check, DeviceReport, Origin, Verdict } from "./types";
 
 /** Procedencia primero (trae más datos), luego el más reciente. */
@@ -51,8 +51,12 @@ export function combineChecks(checks: Check[]): Check | null {
   const report = mergeReports(parts.map((c) => c.report!));
   const level: Level = parts.some((c) => c.level === "procedencia") ? "procedencia" : "descarte";
   const issues = parts.flatMap((c) => c.issues);
-  const { verdict, origin, reasons } = classify(report, { level, missingServices: issues.map((i) => i.name) });
   const main = parts[0];
+  const { verdict, origin, reasons } = classify(report, {
+    level,
+    platform: main.platform,
+    missingServices: issues.map((i) => i.name),
+  });
 
   return {
     ...main,
@@ -74,6 +78,7 @@ export function combineChecks(checks: Check[]): Check | null {
 /** Una fila del historial: todos los chequeos de un IMEI. */
 export interface CheckGroup {
   imei: string;
+  platform: Platform;
   model: string | null;
   verdict: Verdict | null;
   origin: Origin | null;
@@ -98,6 +103,7 @@ export function groupChecks(checks: Check[]): CheckGroup[] {
     const usable = sorted.filter((c) => c.report);
     groups.push({
       imei,
+      platform: (combined ?? sorted[0]).platform,
       model: combined?.model ?? sorted.find((c) => c.model)?.model ?? null,
       verdict: combined?.verdict ?? null,
       origin: combined?.origin ?? null,

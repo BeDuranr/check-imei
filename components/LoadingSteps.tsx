@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { LEVEL_SERVICES, SERVICES, type Level } from "@/lib/constants";
+import { PLATFORM_LEVEL_SERVICES, SERVICES, type Level, type Platform } from "@/lib/constants";
 
 // El servidor hace todo en una sola petición; los pasos avanzan según el tiempo típico
 // (≈0,5 s por servicio + 2,5 s de espera entre cada uno).
@@ -16,7 +16,7 @@ function Spinner() {
   );
 }
 
-export function LoadingSteps({ level }: { level: Level }) {
+export function LoadingSteps({ level, platform }: { level: Level; platform: Platform }) {
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
@@ -27,7 +27,10 @@ export function LoadingSteps({ level }: { level: Level }) {
 
   const seconds = Math.floor(elapsed / 1000);
 
-  if (level === "procedencia") {
+  const services = PLATFORM_LEVEL_SERVICES[platform][level];
+
+  // Un solo servicio lento (Apple Ultimate, ~30 s): indicador con segundos en vez de pasos.
+  if (services.length === 1) {
     return (
       <div className="flex items-center gap-3 rounded-xl border border-line bg-card p-4" role="status">
         <Spinner />
@@ -39,7 +42,7 @@ export function LoadingSteps({ level }: { level: Level }) {
     );
   }
 
-  const steps = LEVEL_SERVICES.descarte.map((s) => SERVICES[s].name);
+  const steps = services.map((s) => SERVICES[s].name);
   const current = Math.min(steps.length - 1, Math.floor(elapsed / STEP_MS));
 
   return (

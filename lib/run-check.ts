@@ -1,5 +1,5 @@
 import { classify } from "./classify";
-import { LEVEL_SERVICES, SERVICES, type Level } from "./constants";
+import { PLATFORM_BRAND_PATTERN, PLATFORM_LEVEL_SERVICES, SERVICES, type Level, type Platform } from "./constants";
 import type { ProviderErrorKind } from "./errors";
 import type { ProviderResult } from "./imeicheck";
 import { buildReport } from "./parse-result";
@@ -34,6 +34,8 @@ export interface RunResult {
   /** Primer error real del proveedor (se guarda en la base de datos, no se muestra). */
   errorMessage: string | null;
   firstError: { kind: ProviderErrorKind; message: string } | null;
+  /** Marca reportada por el blacklist cuando no coincide con la plataforma elegida (se detuvo antes de seguir cobrando). */
+  brandMismatch?: string;
 }
 
 export interface RunDeps {
@@ -44,10 +46,15 @@ export interface RunDeps {
 
 const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-export async function runServices(level: Level, imei: string, deps: RunDeps): Promise<RunResult> {
+export async function runServices(
+  level: Level,
+  imei: string,
+  deps: RunDeps,
+  platform: Platform = "iphone",
+): Promise<RunResult> {
   const sleep = deps.sleep ?? defaultSleep;
   const now = deps.now ?? Date.now;
-  const services = LEVEL_SERVICES[level];
+  const services = PLATFORM_LEVEL_SERVICES[platform][level];
   const started = now();
   const entries: ServiceEntry[] = [];
   const successes: { html: string; object: Record<string, unknown> | null }[] = [];
@@ -73,6 +80,22 @@ export async function runServices(level: Level, imei: string, deps: RunDeps): Pr
         raw: r.raw,
       });
       successes.push({ html: r.resultHtml, object: r.object });
+
+      // El blacklist trae la marca: si no es la elegida, no se cobran los servicios siguientes.
+      const brand = typeof r.object?.brand === "string" ? r.object.brand : undefined;
+      if (service === 5 && brand && i < services.length - 1 && !PLATFORM_BRAND_PATTERN[platform].test(brand)) {
+        return {
+          status: "failed",
+          entries,
+          orderIds: [r.orderId],
+          costUsd: Math.round(r.price * 100) / 100,
+          report: null,
+          classification: null,
+          errorMessage: `Brand mismatch: ${brand}`,
+          firstError: null,
+          brandMismatch: brand,
+        };
+      }
     } else {
       entries.push({ service, ok: false, kind: r.kind, message: r.message, raw: r.raw });
       // Un IMEI inválido, key mala o falta de saldo se repetiría en los siguientes: no seguir.
@@ -91,7 +114,7 @@ export async function runServices(level: Level, imei: string, deps: RunDeps): Pr
     report = buildReport(successes);
     const okServices = new Set(ok.map((e) => e.service));
     const missingServices = services.filter((s) => !okServices.has(s)).map((s) => SERVICES[s].name);
-    classification = classify(report, { level, missingServices });
+    classification = classify(report, { level, platform, missingServices });
   }
 
   return {

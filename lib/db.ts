@@ -1,7 +1,7 @@
 import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { groupChecks } from "./combine";
-import { CACHE_DAYS, LEVEL_SERVICES, SERVICES, type Level } from "./constants";
+import { CACHE_DAYS, PLATFORM_LEVEL_SERVICES, SERVICES, type Level, type Platform } from "./constants";
 import { userMessage } from "./errors";
 import type { RunResult, ServiceEntry } from "./run-check";
 import type { Check, CheckStatus, CheckSummary, Decision, Device, DeviceReport, Origin, Verdict } from "./types";
@@ -25,6 +25,7 @@ function db(): SupabaseClient {
 interface CheckRow {
   id: string;
   imei: string;
+  platform: Platform | null; // null solo si falta la migración 002
   level: Level;
   status: CheckStatus;
   model: string | null;
@@ -49,12 +50,12 @@ interface DeviceRow {
   updated_at: string | null;
 }
 
-const SUMMARY_COLUMNS = "id, imei, level, status, model, verdict, origin, cost_usd, created_at";
+const SUMMARY_COLUMNS = "id, imei, platform, level, status, model, verdict, origin, cost_usd, created_at";
 
 function issuesFor(row: CheckRow): Check["issues"] {
   if (row.status === "success" || row.status === "pending") return [];
   const entries = row.raw_responses ?? [];
-  return LEVEL_SERVICES[row.level]
+  return PLATFORM_LEVEL_SERVICES[row.platform ?? "iphone"][row.level]
     .filter((service) => !entries.some((e) => e.service === service && e.ok))
     .map((service) => {
       const entry = entries.find((e) => e.service === service);
@@ -72,6 +73,7 @@ function toCheck(row: CheckRow): Check {
   return {
     id: row.id,
     imei: row.imei,
+    platform: row.platform ?? "iphone",
     level: row.level,
     status: row.status,
     model: row.model,
@@ -87,10 +89,11 @@ function toCheck(row: CheckRow): Check {
   };
 }
 
-function toSummary(row: Pick<CheckRow, "id" | "imei" | "level" | "status" | "model" | "verdict" | "origin" | "cost_usd" | "created_at">): CheckSummary {
+function toSummary(row: Pick<CheckRow, "id" | "imei" | "platform" | "level" | "status" | "model" | "verdict" | "origin" | "cost_usd" | "created_at">): CheckSummary {
   return {
     id: row.id,
     imei: row.imei,
+    platform: row.platform ?? "iphone",
     level: row.level,
     status: row.status,
     model: row.model,
@@ -112,13 +115,14 @@ function toDevice(row: DeviceRow): Device {
   };
 }
 
-export async function findRecentSuccess(imei: string, level: Level): Promise<Check | null> {
+export async function findRecentSuccess(imei: string, level: Level, platform: Platform): Promise<Check | null> {
   const since = new Date(Date.now() - CACHE_DAYS * 86_400_000).toISOString();
   const { data, error } = await db()
     .from("checks")
     .select("*")
     .eq("imei", imei)
     .eq("level", level)
+    .eq("platform", platform)
     .eq("status", "success")
     .gte("created_at", since)
     .order("created_at", { ascending: false })
@@ -142,10 +146,10 @@ export async function expireStalePending(imei: string, level: Level): Promise<vo
 }
 
 /** Crea el registro `pending`. Devuelve null si ya hay una consulta en curso (índice único). */
-export async function insertPending(imei: string, level: Level): Promise<string | null> {
+export async function insertPending(imei: string, level: Level, platform: Platform): Promise<string | null> {
   const { data, error } = await db()
     .from("checks")
-    .insert({ imei, level, status: "pending", services: LEVEL_SERVICES[level] })
+    .insert({ imei, platform, level, status: "pending", services: PLATFORM_LEVEL_SERVICES[platform][level] })
     .select("id")
     .single<{ id: string }>();
   if (error) {
@@ -197,7 +201,14 @@ export async function findCheckIdByOrderId(orderId: number): Promise<string | nu
 export async function insertCompletedCheck(imei: string, level: Level, createdAt: string, result: RunResult): Promise<Check> {
   const { data, error } = await db()
     .from("checks")
-    .insert({ imei, level, services: LEVEL_SERVICES[level], created_at: createdAt, ...resultColumns(result) })
+    .insert({
+      imei,
+      platform: "iphone",
+      level,
+      services: PLATFORM_LEVEL_SERVICES.iphone[level],
+      created_at: createdAt,
+      ...resultColumns(result),
+    })
     .select("*")
     .single<CheckRow>();
   if (error) throw error;

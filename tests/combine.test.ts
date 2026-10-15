@@ -15,6 +15,7 @@ function makeCheck(level: Check["level"], report: DeviceReport | null, overrides
   return {
     id: `00000000-0000-0000-0000-${String(seq).padStart(12, "0")}`,
     imei: "355564840000000",
+    platform: "iphone",
     level,
     status: report ? "success" : "failed",
     model: report?.model ?? null,

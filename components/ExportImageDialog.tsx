@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "@/lib/client-fetch";
 import { latestPerLevel } from "@/lib/combine";
-import { LEVEL_LABEL } from "@/lib/constants";
+import { levelLabel } from "@/lib/constants";
 import { buildExportData } from "@/lib/export-fields";
 import { formatDate } from "@/lib/format";
 import { renderReportImage } from "@/lib/report-image";
@@ -116,7 +116,7 @@ export function ExportImageDialog({ check, sources, onClose }: Props) {
         {used.length > 1 && (
           <p className="text-sm text-muted">
             Combina:{" "}
-            {used.map((c) => `${LEVEL_LABEL[c.level]} (${formatDate(c.createdAt)})`).join(" + ")}
+            {used.map((c) => `${levelLabel(c.platform, c.level)} (${formatDate(c.createdAt)})`).join(" + ")}
           </p>
         )}
 

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch, readError } from "@/lib/client-fetch";
 import { combineChecks, latestPerLevel } from "@/lib/combine";
-import { LEVEL_LABEL } from "@/lib/constants";
+import { levelLabel } from "@/lib/constants";
 import { formatDateTime, formatUsd } from "@/lib/format";
 import type { Check, Device } from "@/lib/types";
 import { DeviceForm } from "./DeviceForm";
@@ -68,7 +68,7 @@ export function CheckDetail({ id }: { id: string }) {
                     >
                       <VerdictBadge verdict={c.verdict} />
                       <span className="min-w-0 flex-1">
-                        <span className="block font-medium">{LEVEL_LABEL[c.level]}</span>
+                        <span className="block font-medium">{levelLabel(c.platform, c.level)}</span>
                         <span className="block text-sm text-muted">
                           {formatDateTime(c.createdAt)}
                           {c.status === "partial" && " · incompleto"}

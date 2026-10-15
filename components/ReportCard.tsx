@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { LEVEL_LABEL } from "@/lib/constants";
+import { levelLabel } from "@/lib/constants";
 import { formatDate, formatDateTime, formatUsd } from "@/lib/format";
 import type { Check, DeviceReport, Origin } from "@/lib/types";
 import { ExportImageDialog } from "./ExportImageDialog";
@@ -48,9 +48,13 @@ export function buildSummary(check: Check): string {
   if (r.soldBy) lines.push(`Vendido por: ${r.soldBy}`);
   if (r.purchaseCountry) lines.push(`País de compra: ${r.purchaseCountry}`);
   if (r.purchaseDate) lines.push(`Fecha de compra: ${r.purchaseDate}`);
-  lines.push(`Find My: ${r.fmi ?? "—"} | MDM: ${r.mdm ?? "—"} | Blacklist: ${r.blacklist ?? "—"}`);
-  if (r.warrantyStatus) lines.push(`Garantía: ${r.warrantyStatus}`);
-  lines.push(`Revisado: ${formatDateTime(check.createdAt)} (${LEVEL_LABEL[check.level].toLowerCase()})`);
+  if (check.platform === "samsung") {
+    lines.push(`Knox Guard: ${r.knoxGuard ?? "—"} | Blacklist: ${r.blacklist ?? "—"}`);
+  } else {
+    lines.push(`Find My: ${r.fmi ?? "—"} | MDM: ${r.mdm ?? "—"} | Blacklist: ${r.blacklist ?? "—"}`);
+  }
+  if (r.warrantyStatus) lines.push(`Garantía: ${r.warrantyStatus}${r.warrantyEnd ? ` (hasta ${r.warrantyEnd})` : ""}`);
+  lines.push(`Revisado: ${formatDateTime(check.createdAt)} (${levelLabel(check.platform, check.level).toLowerCase()})`);
   return lines.join("\n");
 }
 
@@ -100,8 +104,8 @@ export function ReportCard({ check, cached, onProcedencia, onRecheck, busy, comb
           <span className="font-mono">{check.imei}</span>
           <span>
             {combinedFrom && combinedFrom.length > 1
-              ? `Combina ${combinedFrom.map((c) => LEVEL_LABEL[c.level].toLowerCase()).join(" + ")}`
-              : `${LEVEL_LABEL[check.level]} · ${formatDateTime(check.createdAt)}`}
+              ? `Combina ${combinedFrom.map((c) => levelLabel(c.platform, c.level).toLowerCase()).join(" + ")}`
+              : `${levelLabel(check.platform, check.level)} · ${formatDateTime(check.createdAt)}`}
           </span>
         </div>
 
@@ -133,7 +137,25 @@ export function ReportCard({ check, cached, onProcedencia, onRecheck, busy, comb
           </div>
         )}
 
-        {check.report && (
+        {check.report && check.platform === "samsung" && (
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-3 border-t border-line pt-4">
+            <div className="col-span-2">
+              <Field label="Modelo" value={r.model} strong />
+            </div>
+            <Field label="Knox Guard" value={r.knoxGuard} tone={r.knoxGuard ? (/^off$/i.test(r.knoxGuard) ? "ok" : "bad") : undefined} strong />
+            <Field label="Blacklist" value={r.blacklist} tone={blacklistTone(r.blacklist)} strong />
+            <Field
+              label="Garantía"
+              value={r.warrantyStatus && (r.warrantyEnd ? `${r.warrantyStatus} (hasta ${r.warrantyEnd})` : r.warrantyStatus)}
+              tone={r.warrantyStatus ? (/active/i.test(r.warrantyStatus) ? "ok" : undefined) : undefined}
+            />
+            <Field label="Fecha de producción" value={r.productionDate} />
+            <Field label="Número de modelo" value={r.modelNumber} />
+            <Field label="Código de región" value={r.regionCode} />
+          </dl>
+        )}
+
+        {check.report && check.platform !== "samsung" && (
           <dl className="grid grid-cols-2 gap-x-4 gap-y-3 border-t border-line pt-4">
             <div className="col-span-2">
               <Field label="Modelo" value={r.model} strong />

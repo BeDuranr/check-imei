@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { ProviderResult } from "../lib/imeicheck";
 import { runServices, SERVICE_GAP_MS } from "../lib/run-check";
 import service1 from "./fixtures/service1.json";
+import samsung5 from "./fixtures/samsung-service5.json";
+import service37 from "./fixtures/service37.json";
 import service47 from "./fixtures/service47.json";
 
 const IMEI = "490154203237518";
@@ -11,7 +13,7 @@ function success(orderId: number, price: number, resultHtml: string, object: Rec
 }
 
 describe("runServices", () => {
-  it("descarte: llama 1 → 5 → 4 esperando entre cada uno", async () => {
+  it("descarte: llama 5 → 1 → 4 esperando entre cada uno", async () => {
     const responses: Record<number, ProviderResult> = {
       1: success(1, 0.01, service1.result, service1.object),
       5: success(2, 0.02, "Blacklist Status: Clean"),
@@ -22,12 +24,12 @@ describe("runServices", () => {
 
     const r = await runServices("descarte", IMEI, { createOrder, sleep });
 
-    expect(createOrder.mock.calls.map((c) => c[0])).toEqual([1, 5, 4]);
+    expect(createOrder.mock.calls.map((c) => c[0])).toEqual([5, 1, 4]);
     expect(sleep).toHaveBeenCalledTimes(2);
     expect(sleep).toHaveBeenCalledWith(SERVICE_GAP_MS);
     expect(r.status).toBe("success");
     expect(r.costUsd).toBe(0.05);
-    expect(r.orderIds).toEqual([1, 2, 3]);
+    expect(r.orderIds).toEqual([2, 1, 3]);
     expect(r.report?.blacklist).toBe("Clean");
     expect(r.classification?.verdict).toBe("amarillo"); // FMI ON + falta procedencia
     expect(r.classification?.reasons).toContain("Falta chequeo de procedencia");
@@ -35,17 +37,17 @@ describe("runServices", () => {
 
   it("descarte parcial: se detiene ante error de sistema y guarda lo que funcionó", async () => {
     const createOrder = vi.fn(async (service: number): Promise<ProviderResult> =>
-      service === 1
-        ? success(1, 0.01, service1.result, service1.object)
+      service === 5
+        ? success(1, 0.02, "Blacklist Status: Clean")
         : { ok: false, kind: "error", message: "Insufficient balance", raw: {} },
     );
     const r = await runServices("descarte", IMEI, { createOrder, sleep: async () => {} });
 
     expect(createOrder).toHaveBeenCalledTimes(2);
     expect(r.status).toBe("partial");
-    expect(r.costUsd).toBe(0.01);
+    expect(r.costUsd).toBe(0.02);
     expect(r.errorMessage).toBe("Insufficient balance");
-    expect(r.classification?.reasons).toContain("No se pudo revisar Blacklist");
+    expect(r.classification?.reasons).toContain("No se pudo revisar Find My");
     expect(r.classification?.reasons).toContain("No se pudo revisar iCloud");
   });
 
@@ -92,5 +94,36 @@ describe("runServices", () => {
     const r = await runServices("descarte", IMEI, { createOrder, sleep: async () => {}, now: () => t });
     expect(createOrder).toHaveBeenCalledTimes(1);
     expect(r.status).toBe("partial");
+  });
+
+  it("Samsung: chequeo completo 5 → 37 con los fixtures reales", async () => {
+    const createOrder = vi.fn(async (service: number): Promise<ProviderResult> =>
+      service === 5
+        ? success(samsung5.orderId, 0.02, samsung5.result, samsung5.object)
+        : success(service37.orderId, 0.08, service37.result, null),
+    );
+    const r = await runServices("procedencia", IMEI, { createOrder, sleep: async () => {} }, "samsung");
+
+    expect(createOrder.mock.calls.map((c) => c[0])).toEqual([5, 37]);
+    expect(r.status).toBe("success");
+    expect(r.costUsd).toBe(0.1);
+    expect(r.report).toMatchObject({ model: "Galaxy S26 Ultra", knoxGuard: "OFF", blacklist: "Clean", regionCode: "LTL" });
+    expect(r.classification?.verdict).toBe("verde");
+  });
+
+  it("marca equivocada: se detiene después del blacklist y solo cobra ese servicio", async () => {
+    const createOrder = vi.fn(async (): Promise<ProviderResult> =>
+      success(9, 0.02, "Brand: Apple Inc<br>Blacklist Status: Clean", { brand: "Apple Inc", blacklistStatus: false }),
+    );
+    const r = await runServices("procedencia", IMEI, { createOrder, sleep: async () => {} }, "samsung");
+
+    expect(createOrder).toHaveBeenCalledTimes(1);
+    expect(r).toMatchObject({ status: "failed", brandMismatch: "Apple Inc", costUsd: 0.02, orderIds: [9], report: null });
+
+    // Y al revés: un Samsung revisado como iPhone no paga Find My ni iCloud.
+    const samsung = vi.fn(async (): Promise<ProviderResult> => success(10, 0.02, samsung5.result, samsung5.object));
+    const r2 = await runServices("descarte", IMEI, { createOrder: samsung, sleep: async () => {} });
+    expect(samsung).toHaveBeenCalledTimes(1);
+    expect(r2.brandMismatch).toBe("Samsung Korea");
   });
 });

@@ -1,4 +1,4 @@
-import type { Level } from "./constants";
+import type { Level, Platform } from "./constants";
 
 export type Verdict = "verde" | "amarillo" | "rojo";
 export type Origin = "retail" | "compañia" | "desconocido";
@@ -23,6 +23,13 @@ export interface DeviceReport {
   icloudStatus?: string; // servicio 4
   replacementHistory?: string;
   loaner?: string;
+  // Android / Samsung (servicios 5 y 37)
+  brand?: string; // marca reportada por el servicio 5 ("Samsung Korea", "Apple Inc")
+  knoxGuard?: string; // "OFF" = no inscrito; cualquier otro valor = activo
+  modelNumber?: string; // "SM-S948BZVJLTL"
+  regionCode?: string; // últimas 3 letras del número de modelo Samsung ("LTL"), significado por confirmar
+  warrantyEnd?: string; // DD-MM-AAAA
+  productionDate?: string; // DD-MM-AAAA
   raw: Record<string, string>; // todos los pares parseados
 }
 
@@ -43,6 +50,7 @@ export interface ServiceIssue {
 export interface Check {
   id: string;
   imei: string;
+  platform: Platform;
   level: Level;
   status: CheckStatus;
   model: string | null;
@@ -59,7 +67,7 @@ export interface Check {
 
 export type CheckSummary = Pick<
   Check,
-  "id" | "imei" | "level" | "status" | "model" | "verdict" | "origin" | "costUsd" | "createdAt"
+  "id" | "imei" | "platform" | "level" | "status" | "model" | "verdict" | "origin" | "costUsd" | "createdAt"
 >;
 
 export interface Device {

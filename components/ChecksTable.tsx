@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { apiFetch, readError } from "@/lib/client-fetch";
-import { LEVEL_LABEL } from "@/lib/constants";
+import { levelLabel, PLATFORM_LABEL } from "@/lib/constants";
 import { formatDateTime, formatUsd, maskImei } from "@/lib/format";
 import type { CheckGroup } from "@/lib/combine";
 import type { Origin, Verdict } from "@/lib/types";
@@ -108,13 +108,14 @@ export function ChecksTable() {
                 </div>
                 <div className="mt-0.5 flex flex-wrap gap-x-2 text-sm text-muted">
                   <span className="font-mono">{maskImei(group.imei)}</span>
+                  {group.platform !== "iphone" && <span>· {PLATFORM_LABEL[group.platform]}</span>}
                   {group.origin && group.origin !== "desconocido" && <span>· {ORIGIN_LABEL[group.origin]}</span>}
                   {group.partial && <span>· incompleto</span>}
                 </div>
                 <div className="mt-1.5 flex flex-wrap gap-1">
                   {group.levels.map((level) => (
                     <span key={level} className="rounded-md bg-bg px-1.5 py-0.5 text-xs text-muted">
-                      {LEVEL_LABEL[level]}
+                      {levelLabel(group.platform, level)}
                     </span>
                   ))}
                   {group.count > group.levels.length && (

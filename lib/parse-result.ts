@@ -78,6 +78,11 @@ const FIELD_KEYS = {
   icloudStatus: ["icloudstatus", "icloudcleanlost", "lostmode", "lostmodestatus", "icloud"],
   replacementHistory: ["replacementhistory", "replaced"],
   loaner: ["loanerdevice", "loaner"],
+  brand: ["brand"],
+  knoxGuard: ["knoxguard", "kgstatus", "knoxguardstatus"],
+  modelNumber: ["modelnumber"],
+  warrantyEnd: ["estimatedwarrantyenddate", "warrantyenddate"],
+  productionDate: ["productiondate"],
 } as const satisfies Record<string, readonly string[]>;
 
 // Booleanos de `object` con significado propio (verificado con respuestas reales de los
@@ -140,6 +145,7 @@ export function buildReport(sources: ReportSource[]): DeviceReport {
   };
 
   const purchaseDate = pick("purchaseDate");
+  const modelNumber = pick("modelNumber");
   const report: DeviceReport = {
     model: pick("model"),
     serial: pick("serial"),
@@ -156,6 +162,13 @@ export function buildReport(sources: ReportSource[]): DeviceReport {
     icloudStatus: pick("icloudStatus"),
     replacementHistory: pick("replacementHistory"),
     loaner: pick("loaner"),
+    brand: pick("brand"),
+    knoxGuard: pick("knoxGuard"),
+    modelNumber,
+    // Samsung: "SM-S948BZVJLTL" → "LTL" (código de región/venta del producto).
+    regionCode: modelNumber?.match(/^SM-[A-Z0-9]+?([A-Z]{3})$/i)?.[1]?.toUpperCase(),
+    warrantyEnd: pick("warrantyEnd"),
+    productionDate: pick("productionDate"),
     raw,
   };
 
