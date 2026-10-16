@@ -11,5 +11,8 @@ export function userMessage(kind: ProviderErrorKind, message: string): string {
   if (/balance|insufficient|not enough|credit|fund|saldo/i.test(message)) {
     return "No hay saldo suficiente en imeicheck.com. Recarga créditos.";
   }
+  if (/unable to check|try again later|temporar/i.test(message)) {
+    return "El proveedor no pudo revisar este dato ahora. Se puede reintentar más tarde (no se cobró).";
+  }
   return "No se pudo completar la consulta.";
 }

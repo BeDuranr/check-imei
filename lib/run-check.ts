@@ -70,6 +70,15 @@ function startProgress(deps: RunDeps): Progress {
   return { sleep: deps.sleep ?? defaultSleep, now, started: now(), entries: [], sources: [] };
 }
 
+/**
+ * Errores que se repetirían en los servicios siguientes: de sistema (key, IP, saldo) o IMEI rechazado.
+ * Otros `failed` son propios de un servicio (p. ej. el 4: "Unable to check iCloud status") y no cobran:
+ * se sigue con el resto para no perder, por ejemplo, Apple Ultimate.
+ */
+function repeatsInEveryService(kind: ProviderErrorKind, message: string): boolean {
+  return kind === "error" || (kind === "failed" && /invalid\s*imei/i.test(message));
+}
+
 /** Ejecuta servicios en secuencia. Se detiene ante errores que se repetirían (IMEI inválido, key, saldo). */
 async function execute(services: number[], imei: string, deps: RunDeps, progress: Progress): Promise<void> {
   for (const service of services) {
@@ -94,8 +103,7 @@ async function execute(services: number[], imei: string, deps: RunDeps, progress
       progress.sources.push({ html: r.resultHtml, object: r.object });
     } else {
       progress.entries.push({ service, ok: false, kind: r.kind, message: r.message, raw: r.raw });
-      // Un IMEI inválido, key mala o falta de saldo se repetiría en los siguientes: no seguir.
-      if (r.kind !== "network") return;
+      if (repeatsInEveryService(r.kind, r.message)) return;
     }
   }
 }

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { userMessage } from "../lib/errors";
 import { createOrder, getBalance, redactKey } from "../lib/imeicheck";
 import service1 from "./fixtures/service1.json";
+import service4Failed from "./fixtures/service4-failed.json";
 import service47 from "./fixtures/service47.json";
 
 const KEY = "test-key-123";
@@ -47,6 +48,15 @@ describe("createOrder", () => {
     expect(await createOrder(1, "123")).toMatchObject({ ok: false, kind: "error", message: "Invalid ApiKey" });
   });
 
+  it("failed con el motivo en result (respuesta real del servicio 4)", async () => {
+    mockFetch(service4Failed);
+    expect(await createOrder(4, "1")).toMatchObject({
+      ok: false,
+      kind: "failed",
+      message: "FMI Error: Unable to check iCloud status.",
+    });
+  });
+
   it("errores de red → network, sin exponer la URL", async () => {
     vi.stubGlobal(
       "fetch",
@@ -86,6 +96,7 @@ describe("userMessage", () => {
     expect(userMessage("error", "Wrong IP address")).toContain("configuración");
     expect(userMessage("error", "Insufficient balance")).toContain("saldo");
     expect(userMessage("network", "Timeout")).toContain("tardó demasiado");
+    expect(userMessage("failed", "FMI Error: Unable to check iCloud status.")).toContain("no se cobró");
     expect(userMessage("error", "Something weird")).toBe("No se pudo completar la consulta.");
   });
 });

@@ -96,7 +96,10 @@ export async function createOrder(
     };
   }
 
-  const message = String(j.response ?? j.message ?? `Estado desconocido: ${status || "sin estado"}`);
+  // Algunos `failed` traen el motivo en `result` (HTML) en vez de `response`, p. ej. el servicio 4:
+  // "FMI Error: Unable to check iCloud status."
+  const resultText = typeof j.result === "string" ? j.result.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim() : "";
+  const message = String(j.response ?? (resultText || j.message) ?? `Estado desconocido: ${status || "sin estado"}`);
   return { ok: false, kind: status === "failed" ? "failed" : "error", message, raw };
 }
 

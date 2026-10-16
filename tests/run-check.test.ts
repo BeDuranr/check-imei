@@ -133,6 +133,19 @@ describe("runAuto (detección de marca)", () => {
     expect(r.classification?.origin).toBe("compañia");
   });
 
+  it("si iCloud falla (problema del proveedor), igual corre Apple Ultimate", async () => {
+    const createOrder = vi.fn(async (service: number): Promise<ProviderResult> => {
+      if (service === 5) return success(1, 0.02, "Blacklist Status: Clean", { brand: "APPLE", blacklistStatus: false });
+      if (service === 4) return { ok: false, kind: "failed", message: "FMI Error: Unable to check iCloud status.", raw: {} };
+      return success(3, 0.75, service47.result, null);
+    });
+    const r = await runAuto(IMEI, { createOrder, sleep });
+    expect(createOrder.mock.calls.map((c) => c[0])).toEqual([5, 4, 47]);
+    expect(r).toMatchObject({ platform: "iphone", status: "partial", costUsd: 0.77 });
+    expect(r.report?.soldBy).toBe("AMERICA MOVIL PERU SAC");
+    expect(r.classification?.reasons).toContain("No se pudo revisar iCloud");
+  });
+
   it("si Apple Ultimate no alcanza a responder, queda parcial con blacklist e iCloud", async () => {
     let t = 0;
     const createOrder = vi.fn(async (service: number): Promise<ProviderResult> => {

@@ -123,6 +123,8 @@ tests/                    # tests de Vitest + fixtures con respuestas reales del
   - Servicio 37 (Samsung): `object: false`; claves `Knox Guard` (`OFF`), `Warranty Status`, `Estimated Warranty End Date`
     (DD-MM-AAAA), `Production Date`, `Model Number` (`SM-S948BZVJLTL`, las 3 últimas letras = región). No trae país.
 - Fallido (`status: "failed"`): usa `cost` y `response`, sin `price` ni `result`. No cobra.
+  Algunos `failed` traen el motivo en `result` y `price: 0` (servicio 4: `"FMI Error: Unable to check iCloud status."`,
+  fixture `service4-failed.json`). Solo `error` o `Invalid IMEI` detienen el chequeo; otros `failed` siguen con el resto.
 - Error de sistema (`status: "error"`): `response` con el motivo (key inválida, IP, saldo).
 - `/history` usa otros nombres (`order_id`, `credit`, `status` en mayúsculas), **no trae `object`** ni el ID del
   servicio (solo `service_name`); por eso todo se guarda en la base de datos al crear la orden. Sirve para importar
