@@ -156,16 +156,26 @@ export function ReportCard({ check, cached, onProcedencia, onRecheck, busy, comb
           </dl>
         )}
 
-        {check.report && check.platform === "samsung" && (
+        {check.report && (check.platform === "samsung" || check.platform === "huawei") && (
           <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
             <Field
               label="Garantía"
               value={r.warrantyStatus && (r.warrantyEnd ? `${r.warrantyStatus} (hasta ${r.warrantyEnd})` : r.warrantyStatus)}
               tone={r.warrantyStatus ? (/active/i.test(r.warrantyStatus) ? "ok" : undefined) : undefined}
             />
-            <Field label="Fecha de producción" value={r.productionDate} />
-            <Field label="Número de modelo" value={r.modelNumber} />
-            <Field label="Código de región" value={r.regionCode} />
+            {/* Solo los datos que trae cada marca: Samsung (producción, región) o Huawei (inicio y país de garantía). */}
+            {r.warrantyStart && <Field label="Inicio de garantía" value={r.warrantyStart} />}
+            {r.purchaseCountry && (
+              <Field
+                label="País de la garantía"
+                value={r.purchaseCountry}
+                tone={/^chile$/i.test(r.purchaseCountry) ? "ok" : "warn"}
+              />
+            )}
+            {r.productionDate && <Field label="Fecha de producción" value={r.productionDate} />}
+            {r.modelNumber && <Field label="Número de modelo" value={r.modelNumber} />}
+            {r.regionCode && <Field label="Código de región" value={r.regionCode} />}
+            {r.serial && check.platform === "huawei" && <Field label="N° de serie" value={r.serial} />}
           </dl>
         )}
 

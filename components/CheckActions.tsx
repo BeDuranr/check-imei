@@ -5,6 +5,7 @@ import { baseLevel, formatPrice, levelPrice, type Platform } from "@/lib/constan
 const PRICE_PLATFORMS: [Platform, string][] = [
   ["iphone", "iPhone"],
   ["samsung", "Samsung"],
+  ["huawei", "Huawei"],
   ["android", "otras"],
 ];
 

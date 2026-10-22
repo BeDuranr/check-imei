@@ -66,7 +66,7 @@ const FIELD_KEYS = {
   model: ["model", "modelname", "modeldescription"],
   serial: ["serialnumber", "serial", "sn"],
   soldBy: ["soldby"],
-  purchaseCountry: ["purchasecountry"],
+  purchaseCountry: ["purchasecountry", "warrantyvalidincountry"],
   purchaseDate: ["purchasedate", "estimatedpurchasedate"],
   firstActivationDate: ["firstactivationdate"],
   carrier: ["carrier", "lockedcarrier"],
@@ -82,6 +82,7 @@ const FIELD_KEYS = {
   knoxGuard: ["knoxguard", "kgstatus", "knoxguardstatus"],
   modelNumber: ["modelnumber"],
   warrantyEnd: ["estimatedwarrantyenddate", "warrantyenddate"],
+  warrantyStart: ["warrantystartdate"],
   productionDate: ["productiondate"],
 } as const satisfies Record<string, readonly string[]>;
 
@@ -100,6 +101,33 @@ function toOnOff(value: string | undefined): "ON" | "OFF" | undefined {
   if (/\bON\b/.test(v) || v === "YES" || v === "TRUE") return "ON";
   if (/\bOFF\b/.test(v) || v === "NO" || v === "FALSE") return "OFF";
   return undefined;
+}
+
+/** Fechas de garantía/producción a DD-MM-AAAA: "2025/1/10" → "10-01-2025"; "23-01-2028" queda igual. */
+export function toDmy(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const ymd = value.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})/);
+  if (ymd) return `${ymd[3].padStart(2, "0")}-${ymd[2].padStart(2, "0")}-${ymd[1]}`;
+  return value;
+}
+
+/** Código de país ISO de 2 letras a nombre ("CL" → "Chile"). Los nombres completos quedan igual. */
+function countryName(value: string | undefined): string | undefined {
+  if (!value || !/^[A-Z]{2}$/.test(value.trim())) return value;
+  try {
+    return new Intl.DisplayNames(["es"], { type: "region" }).of(value.trim()) ?? value;
+  } catch {
+    return value;
+  }
+}
+
+/**
+ * Huawei (servicio 17): el modelo viene como código ("ICL-LX9") y el nombre comercial solo aparece dentro del texto
+ * de una cobertura: "HUAWEI Accidental Screen Damage Warranty For Mate X6 12M ...".
+ */
+function huaweiMarketName(html: string): string | undefined {
+  const name = html.match(/Warranty For (.+?) \d+M\b/i)?.[1]?.trim();
+  return name && name.length <= 40 ? name : undefined;
 }
 
 export interface ReportSource {
@@ -146,11 +174,12 @@ export function buildReport(sources: ReportSource[]): DeviceReport {
 
   const purchaseDate = pick("purchaseDate");
   const modelNumber = pick("modelNumber");
+  const marketName = sources.map((s) => (s.html ? huaweiMarketName(s.html) : undefined)).find(Boolean);
   const report: DeviceReport = {
-    model: pick("model"),
+    model: marketName ?? pick("model"),
     serial: pick("serial"),
     soldBy: pick("soldBy"),
-    purchaseCountry: pick("purchaseCountry"),
+    purchaseCountry: countryName(pick("purchaseCountry")),
     purchaseDate: purchaseDate?.match(/\d{4}-\d{2}-\d{2}/)?.[0] ?? purchaseDate,
     firstActivationDate: pick("firstActivationDate"),
     carrier: pick("carrier"),
@@ -167,8 +196,9 @@ export function buildReport(sources: ReportSource[]): DeviceReport {
     modelNumber,
     // Samsung: "SM-S948BZVJLTL" → "LTL" (código de región/venta del producto).
     regionCode: modelNumber?.match(/^SM-[A-Z0-9]+?([A-Z]{3})$/i)?.[1]?.toUpperCase(),
-    warrantyEnd: pick("warrantyEnd"),
-    productionDate: pick("productionDate"),
+    warrantyEnd: toDmy(pick("warrantyEnd")),
+    warrantyStart: toDmy(pick("warrantyStart")),
+    productionDate: toDmy(pick("productionDate")),
     raw,
   };
 

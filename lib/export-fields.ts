@@ -64,6 +64,16 @@ function samsungColor(modelInfo: string | undefined, model: string | undefined, 
   return rest ? titleCase(rest) : undefined;
 }
 
+function isWarrantyActive(status: string): boolean {
+  return /active|in warranty|limited warranty|applecare/i.test(status) && !/out of warranty/i.test(status);
+}
+
+/** "Vigente hasta 23-01-2028", "Vencida el 11-01-2026" o la etiqueta sin fecha. */
+function warrantyText(status: string, end: string | undefined): string {
+  if (!end) return warrantyLabel(status);
+  return isWarrantyActive(status) ? `${warrantyLabel(status)} hasta ${end}` : `Vencida el ${end}`;
+}
+
 function warrantyLabel(status: string): string {
   if (/out of warranty|no coverage|expired/i.test(status)) return "Sin garantía (vencida)";
   if (/applecare/i.test(status)) return status;
@@ -110,13 +120,19 @@ export function buildExportData(checks: Check[]): ExportData {
 
   const compra = rows([
     { label: "Lugar de compra", value: r.soldBy ?? "" },
-    { label: "País de compra", value: r.purchaseCountry ?? "", tone: r.purchaseCountry ? (/^chile$/i.test(r.purchaseCountry) ? "ok" : "warn") : undefined },
+    {
+      // Huawei no informa dónde se compró, sino dónde vale la garantía.
+      label: main.platform === "huawei" ? "País de la garantía" : "País de compra",
+      value: r.purchaseCountry ?? "",
+      tone: r.purchaseCountry ? (/^chile$/i.test(r.purchaseCountry) ? "ok" : "warn") : undefined,
+    },
     { label: "Fecha de compra", value: r.purchaseDate ? formatProviderDate(r.purchaseDate) : "" },
     { label: "Primera activación", value: r.firstActivationDate ? formatProviderDate(r.firstActivationDate) : "" },
+    { label: "Inicio de garantía", value: r.warrantyStart ?? "" },
     {
       label: "Garantía",
-      value: r.warrantyStatus ? warrantyLabel(r.warrantyStatus) + (r.warrantyEnd ? ` hasta ${r.warrantyEnd}` : "") : "",
-      tone: r.warrantyStatus && /active/i.test(r.warrantyStatus) ? "ok" : undefined,
+      value: r.warrantyStatus ? warrantyText(r.warrantyStatus, r.warrantyEnd) : "",
+      tone: r.warrantyStatus && isWarrantyActive(r.warrantyStatus) ? "ok" : undefined,
     },
     { label: "Fecha de producción", value: r.productionDate ?? "" },
     { label: "Código de región", value: r.regionCode ?? "" },

@@ -59,9 +59,17 @@ export interface ClassifyOptions {
   missingServices?: string[];
 }
 
-/** Recordatorio fijo en Android: FRP y la cuenta Samsung no se pueden consultar por IMEI. */
+/** Recordatorio fijo en Android: FRP y las cuentas del fabricante no se pueden consultar por IMEI. */
 export const ANDROID_ACCOUNTS_REASON =
   "Verifica en persona que el vendedor cierre sus cuentas de Google y Samsung y restablezca el equipo frente a ti";
+
+function accountsReason(platform: Platform): string {
+  if (platform === "samsung") return ANDROID_ACCOUNTS_REASON;
+  if (platform === "huawei") {
+    return "Verifica en persona que el vendedor cierre su HUAWEI ID (y Google, si tiene) y restablezca el equipo frente a ti";
+  }
+  return "Verifica en persona que el vendedor cierre su cuenta de Google y restablezca el equipo frente a ti";
+}
 
 /** Knox Guard: "OFF" o "not registered" = limpio; cualquier otro valor = inscrito/activo. */
 export function isKnoxGuardActive(value: string): boolean {
@@ -69,8 +77,9 @@ export function isKnoxGuardActive(value: string): boolean {
 }
 
 /**
- * Android (Samsung y otras marcas): no hay país ni compañía, así que el origen queda desconocido y
- * no resta. El mejor resultado es verde con el recordatorio de cuentas (no se puede verificar por IMEI).
+ * Android (Samsung, Huawei y otras marcas): no se sabe si fue compañía o retail, así que el origen queda
+ * desconocido y no resta. Huawei sí trae el país de la garantía: fuera de Chile es amarillo, como en iPhone.
+ * El mejor resultado es verde con el recordatorio de cuentas (no se puede verificar por IMEI).
  * "Otra marca" solo tiene blacklist: queda amarillo para que se note que el chequeo es parcial.
  */
 function classifyAndroid(report: DeviceReport, platform: Platform, missingServices: string[]): Classification {
@@ -83,12 +92,18 @@ function classifyAndroid(report: DeviceReport, platform: Platform, missingServic
   if (platform === "android") {
     yellow.push(`Marca sin chequeo completo todavía${report.brand ? ` (${report.brand})` : ""}: solo se revisó el blacklist`);
   }
+  if (report.purchaseCountry && simplify(report.purchaseCountry) !== "CHILE") {
+    yellow.push(`Garantía de otro país (${report.purchaseCountry})`);
+  }
   for (const name of missingServices) yellow.push(`No se pudo revisar ${name}`);
 
   const origin: Origin = "desconocido";
-  if (red.length) return { verdict: "rojo", origin, reasons: [...red, ...yellow, ANDROID_ACCOUNTS_REASON] };
-  if (yellow.length) return { verdict: "amarillo", origin, reasons: [...yellow, ANDROID_ACCOUNTS_REASON] };
-  return { verdict: "verde", origin, reasons: ["Sin blacklist ni Knox Guard", ANDROID_ACCOUNTS_REASON] };
+  const accounts = accountsReason(platform);
+  if (red.length) return { verdict: "rojo", origin, reasons: [...red, ...yellow, accounts] };
+  if (yellow.length) return { verdict: "amarillo", origin, reasons: [...yellow, accounts] };
+  const clean = platform === "samsung" ? "Sin blacklist ni Knox Guard" : "Sin blacklist";
+  const country = report.purchaseCountry ? ` · garantía de ${report.purchaseCountry}` : "";
+  return { verdict: "verde", origin, reasons: [clean + country, accounts] };
 }
 
 export function classify(

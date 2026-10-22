@@ -84,7 +84,7 @@ tests/                    # tests de Vitest + fixtures con respuestas reales del
 
 ## Reglas de dominio
 
-- **Plataformas:** `iphone`, `samsung` y `android` (= otra marca, solo blacklist). Ver `PLATFORM_LEVEL_SERVICES` en
+- **Plataformas:** `iphone`, `samsung`, `huawei` y `android` (= otra marca, solo blacklist). Ver `PLATFORM_LEVEL_SERVICES` en
   `lib/constants.ts`.
 - **Detección automática (`runAuto`):** el botón "Revisar" corre primero el blacklist (5), que devuelve la marca;
   `detectPlatform` elige la plataforma y se corre el chequeo completo de esa marca (`baseLevel`). No hay selector de
@@ -96,6 +96,9 @@ tests/                    # tests de Vitest + fixtures con respuestas reales del
 - **Samsung:** un solo "Chequeo completo" = 5 → 37 (US$0,10), guardado como `level = 'procedencia'`. Rojo si hay
   blacklist o Knox Guard activo; origen siempre desconocido (el 37 no trae país ni compañía); siempre agrega el
   recordatorio de cuentas Google/Samsung (FRP no se puede consultar por IMEI).
+- **Huawei:** chequeo completo = 5 → 17 (US$0,09), guardado como `procedencia`. Trae garantía (inicio, fin) y el país
+  donde vale la garantía (`Warranty Valid in Country: CL` → `purchaseCountry = "Chile"`): fuera de Chile es amarillo.
+  El nombre comercial ("Mate X6") se saca del texto de una cobertura; el modelo del blacklist es un código (`ICL-LX9`).
 - **Niveles iPhone (antiguos):** `descarte` = servicios 5 → 1 → 4 en secuencia, con **2,5 s de espera** entre cada uno (el proveedor
   rechaza el mismo IMEI dos veces en menos de 2 s). Las órdenes importadas del 47 se guardan como `procedencia` con solo `[47]`.
 - **Caché:** un chequeo `success` del mismo IMEI y nivel de los últimos 7 días se devuelve sin volver a cobrar,
@@ -122,6 +125,9 @@ tests/                    # tests de Vitest + fixtures con respuestas reales del
   - Servicio 5 con Samsung: `object.brand` = `"Samsung Korea"` (comparar con *contiene*).
   - Servicio 37 (Samsung): `object: false`; claves `Knox Guard` (`OFF`), `Warranty Status`, `Estimated Warranty End Date`
     (DD-MM-AAAA), `Production Date`, `Model Number` (`SM-S948BZVJLTL`, las 3 últimas letras = región). No trae país.
+  - Servicio 17 (Huawei): `object: false` aunque el catálogo dice que sí; claves `SN`, `Warranty Status`,
+    `Warranty Start Date` / `Warranty End Date` (AAAA/M/D, se normalizan a DD-MM-AAAA con `toDmy`),
+    `Warranty Valid in Country` (código ISO), y varios bloques `Warranty Type` repetidos.
 - Fallido (`status: "failed"`): usa `cost` y `response`, sin `price` ni `result`. No cobra.
   Algunos `failed` traen el motivo en `result` y `price: 0` (servicio 4: `"FMI Error: Unable to check iCloud status."`,
   fixture `service4-failed.json`). Solo `error` o `Invalid IMEI` detienen el chequeo; otros `failed` siguen con el resto.
@@ -166,5 +172,5 @@ proveedor para probar** sin que el usuario lo pida; usa los tests y los fixtures
 ## Fuera de alcance
 
 Otras marcas (Samsung, etc.), múltiples usuarios, consultas masivas e integración de pagos.
-Samsung ya está implementado; el resto del soporte Android (Xiaomi y otras marcas) sigue en
+Samsung y Huawei ya están implementados; el resto del soporte Android (Xiaomi y otras marcas) sigue en
 [`docs/plan-android.md`](docs/plan-android.md).

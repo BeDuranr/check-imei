@@ -29,6 +29,7 @@ export interface DeviceReport {
   modelNumber?: string; // "SM-S948BZVJLTL"
   regionCode?: string; // últimas 3 letras del número de modelo Samsung ("LTL"), significado por confirmar
   warrantyEnd?: string; // DD-MM-AAAA
+  warrantyStart?: string; // DD-MM-AAAA (Huawei: aproxima la fecha de compra/activación)
   productionDate?: string; // DD-MM-AAAA
   raw: Record<string, string>; // todos los pares parseados
 }

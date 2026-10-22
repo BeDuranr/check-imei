@@ -8,13 +8,14 @@ export const LEVELS: Level[] = ["descarte", "procedencia"];
  * Marca/sistema del equipo. "android" = cualquier otra marca, por ahora solo con blacklist
  * (el plan Android agrega Xiaomi y otras: docs/plan-android.md).
  */
-export type Platform = "iphone" | "samsung" | "android";
+export type Platform = "iphone" | "samsung" | "huawei" | "android";
 
-export const PLATFORMS: Platform[] = ["iphone", "samsung", "android"];
+export const PLATFORMS: Platform[] = ["iphone", "samsung", "huawei", "android"];
 
 export const PLATFORM_LABEL: Record<Platform, string> = {
   iphone: "iPhone",
   samsung: "Samsung",
+  huawei: "Huawei",
   android: "Otra marca",
 };
 
@@ -27,6 +28,7 @@ export const SERVICES: Record<number, { name: string; price: number }> = {
   4: { name: "iCloud", price: 0.02 },
   47: { name: "Apple Ultimate", price: 0.75 },
   37: { name: "Samsung Info y Knox Guard", price: 0.08 },
+  17: { name: "Huawei Info", price: 0.07 },
 };
 
 /**
@@ -39,13 +41,15 @@ export const SERVICES: Record<number, { name: string; price: number }> = {
 export const PLATFORM_LEVEL_SERVICES: Record<Platform, Record<Level, number[]>> = {
   iphone: { descarte: [5, 1, 4], procedencia: [5, 4, 47] },
   samsung: { descarte: [], procedencia: [5, 37] },
+  huawei: { descarte: [], procedencia: [5, 17] },
   android: { descarte: [5], procedencia: [] },
 };
 
-/** Plataforma según la marca que reporta el blacklist ("Apple Inc", "Samsung Korea", …). */
+/** Plataforma según la marca que reporta el blacklist ("Apple Inc", "Samsung Korea", "Huawei Device Company Limited"). */
 export function detectPlatform(brand: string | undefined): Platform {
   if (brand && /apple/i.test(brand)) return "iphone";
   if (brand && /samsung/i.test(brand)) return "samsung";
+  if (brand && /huawei/i.test(brand)) return "huawei";
   return "android";
 }
 
@@ -53,6 +57,7 @@ export function detectPlatform(brand: string | undefined): Platform {
 const BASE_LEVEL: Record<Platform, Level> = {
   iphone: "procedencia",
   samsung: "procedencia",
+  huawei: "procedencia",
   android: "descarte",
 };
 
